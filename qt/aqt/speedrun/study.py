@@ -256,6 +256,10 @@ class SpeedrunStudyDialog(QDialog):
         self.activated_total += count
         if count:
             self.activation_label.setText(tr.speedrun_study_activated(count=count))
+        elif reason in (MissReason.KNOWLEDGE_GAP, MissReason.MISSING_CONTEXT):
+            # Qualifying reason, but this topic's linked cards are already active
+            # (e.g. an earlier miss on the same topic already unsuspended them).
+            self.activation_label.setText(tr.speedrun_study_already_active())
         else:
             self.activation_label.setText(tr.speedrun_study_none_activated())
         self.activation_label.setVisible(True)

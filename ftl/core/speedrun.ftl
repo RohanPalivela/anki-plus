@@ -45,6 +45,8 @@ speedrun-study-next = Next question
 speedrun-study-finished = You’ve reached the end of the served questions.
 speedrun-study-activated = Activated { $count } linked card(s).
 speedrun-study-none-activated = No cards activated — this reason isn’t a memory gap.
+speedrun-study-already-active =
+    No new cards — this topic’s linked cards are already active.
 speedrun-study-tally =
     Answered { $answeredCount } · Correct { $correctCount } · Cards activated { $activatedCount }
 speedrun-study-run-sweep = Run coverage sweep
