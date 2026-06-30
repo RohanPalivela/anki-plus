@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any
 import anki
 import anki.collection
 from anki import speedrun_pb2
-from anki.notes import NoteId
+from anki.notes import Note, NoteId
 
 if TYPE_CHECKING:
     from anki.decks import DeckId
@@ -82,6 +82,16 @@ BLUEPRINT_CONFIG_KEY = "speedrunBlueprint"
 SWEEP_SAMPLE_SIZE_CONFIG_KEY = "speedrunSweepSampleSize"
 ORDERING_CONFIG_KEY = "speedrunOrdering"
 
+# Guided-session per-phase caps (Tier 2). Tunable via collection config so the
+# fixed sequence never floods the student (adaptive/capped sizing). Defaults are
+# deliberately small to avoid cognitive overload.
+SESSION_PRACTICE_CAP_CONFIG_KEY = "speedrunSessionPracticeCap"
+SESSION_FLASHCARD_CAP_CONFIG_KEY = "speedrunSessionFlashcardCap"
+SESSION_RECAP_CAP_CONFIG_KEY = "speedrunSessionRecapCap"
+DEFAULT_SESSION_PRACTICE_CAP = 10
+DEFAULT_SESSION_FLASHCARD_CAP = 20
+DEFAULT_SESSION_RECAP_CAP = 5
+
 #: Starter MCAT blueprint: AAMC-style *topic labels and approximate relative
 #: weights only*.
 #:
@@ -103,6 +113,15 @@ DEFAULT_MCAT_BLUEPRINT: dict[str, Any] = {
 
 
 @dataclass
+class SessionCaps:
+    """Per-phase question/card caps for a guided session (Tier 2)."""
+
+    practice: int
+    flashcards: int
+    recap: int
+
+
+@dataclass
 class SetupSummary:
     """What ``setup_mcat`` provisioned, for surfacing in the UI."""
 
@@ -115,6 +134,28 @@ class SetupSummary:
     questions_created: int = 0
     suspended_flashcards_created: int = 0
     studied_flashcards_created: int = 0
+
+
+def topic_of_note(note: Note) -> str | None:
+    """Return the bare topic name from a note's first ``topic::`` tag, if any."""
+    for tag in note.tags:
+        if tag.startswith(TOPIC_TAG_PREFIX):
+            return tag[len(TOPIC_TAG_PREFIX) :]
+    return None
+
+
+def _round_robin(groups: list[list[NoteId]]) -> list[NoteId]:
+    """Interleave per-topic note-id lists so consecutive items differ in topic."""
+    result: list[NoteId] = []
+    cursors = [0] * len(groups)
+    remaining = sum(len(g) for g in groups)
+    while remaining:
+        for i, group in enumerate(groups):
+            if cursors[i] < len(group):
+                result.append(group[cursors[i]])
+                cursors[i] += 1
+                remaining -= 1
+    return result
 
 
 def option_lines(options_field: str) -> list[str]:
@@ -212,6 +253,13 @@ class Speedrun:
 
         if self.col.get_config(SWEEP_SAMPLE_SIZE_CONFIG_KEY) is None:
             self.col.set_config(SWEEP_SAMPLE_SIZE_CONFIG_KEY, 2)
+        for key, default in (
+            (SESSION_PRACTICE_CAP_CONFIG_KEY, DEFAULT_SESSION_PRACTICE_CAP),
+            (SESSION_FLASHCARD_CAP_CONFIG_KEY, DEFAULT_SESSION_FLASHCARD_CAP),
+            (SESSION_RECAP_CAP_CONFIG_KEY, DEFAULT_SESSION_RECAP_CAP),
+        ):
+            if self.col.get_config(key) is None:
+                self.col.set_config(key, default)
         if enable_value_ordering:
             # Opt into value = topic_weight x weakness ordering of activated cards.
             self.col.set_config(ORDERING_CONFIG_KEY, True)
@@ -398,3 +446,48 @@ class Speedrun:
             f"-tag:{POOL_HELDOUT_TAG}"
         )
         return list(self.col.find_notes(query, order=True))
+
+    def served_questions_interleaved(
+        self,
+        *,
+        topics: set[str] | None = None,
+        exclude: set[int] | None = None,
+    ) -> list[NoteId]:
+        """Served question note ids interleaved across topics (no topic blocking).
+
+        ``topics`` restricts the result to those bare topic names (used by the
+        recap phase to target only the just-studied topics); ``exclude`` drops
+        specific note ids (used to keep the recap set disjoint from Phase 1).
+
+        Note: this loads each served note to read its ``topic::`` tag. The served
+        pool is small (tens of items) so this is cheap; revisit if it grows.
+        """
+        exclude = exclude or set()
+        groups: dict[str, list[NoteId]] = {}
+        for nid in self.served_question_note_ids():
+            if nid in exclude:
+                continue
+            topic = topic_of_note(self.col.get_note(nid)) or ""
+            if topics is not None and topic not in topics:
+                continue
+            groups.setdefault(topic, []).append(nid)
+        return _round_robin(list(groups.values()))
+
+    def session_caps(self) -> SessionCaps:
+        """Per-phase caps for a guided session, from config (with defaults)."""
+
+        def cap(key: str, default: int) -> int:
+            value = self.col.get_config(key)
+            try:
+                value = int(value)
+            except (TypeError, ValueError):
+                return default
+            return value if value > 0 else default
+
+        return SessionCaps(
+            practice=cap(SESSION_PRACTICE_CAP_CONFIG_KEY, DEFAULT_SESSION_PRACTICE_CAP),
+            flashcards=cap(
+                SESSION_FLASHCARD_CAP_CONFIG_KEY, DEFAULT_SESSION_FLASHCARD_CAP
+            ),
+            recap=cap(SESSION_RECAP_CAP_CONFIG_KEY, DEFAULT_SESSION_RECAP_CAP),
+        )

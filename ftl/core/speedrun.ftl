@@ -84,3 +84,31 @@ speedrun-dashboard-topic-cards = { $count } card(s)
 speedrun-dashboard-empty =
     Nothing to show yet. Set up Speedrun and study some questions first.
 speedrun-dashboard-refresh = Refresh
+
+## Tier 2 — MCAT home screen (the default landing).
+
+speedrun-home-title = MCAT Anki-Plus
+speedrun-home-tagline =
+    Question-first MCAT practice that decides what to study next.
+speedrun-home-start = Start session
+speedrun-home-start-hint = Practice → memory cards → recap
+speedrun-home-open-dashboard = Full Memory dashboard
+speedrun-home-open-decks = Decks (standard Anki)
+# Top-toolbar link back to the MCAT home.
+speedrun-home-link = Home
+speedrun-home-link-tip = MCAT Anki-Plus home
+
+## Tier 2 — guided session (fixed Practice → Flashcards → Recap sequence).
+
+speedrun-session-practice-title = Practice questions
+speedrun-session-recap-title = Recap — transfer check
+speedrun-session-continue = Continue
+speedrun-session-stop = Stop session
+speedrun-session-stopped = Speedrun session stopped.
+speedrun-session-nothing =
+    Nothing to study yet — run Tools → Speedrun (MCAT) → Set up first.
+speedrun-session-complete = Session complete.
+speedrun-session-complete-detail =
+    You answered { $answeredCount } question(s) ({ $correctCount } correct) and
+    reviewed { $reviewedCount } memory card(s).
+speedrun-session-complete-topics = Topics studied: { $topics }.

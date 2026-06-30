@@ -14,7 +14,7 @@ import weakref
 from argparse import Namespace
 from collections.abc import Callable, Sequence
 from concurrent.futures import Future
-from typing import Any, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Literal, TypeVar, cast
 
 import anki
 import anki.sound
@@ -80,10 +80,22 @@ from aqt.utils import (
 )
 from aqt.webview import AnkiWebView, AnkiWebViewKind
 
+if TYPE_CHECKING:
+    # Speedrun (MCAT fork): typed only; imported lazily at runtime to avoid a
+    # circular import (aqt.speedrun.home imports aqt.main).
+    from aqt.speedrun.home import SpeedrunHome
+
 install_pylib_legacy()
 
 MainWindowState = Literal[
-    "startup", "deckBrowser", "overview", "review", "resetRequired", "profileManager"
+    "startup",
+    "deckBrowser",
+    "overview",
+    "review",
+    "resetRequired",
+    "profileManager",
+    # Speedrun (MCAT fork): branded home screen + guided-session landing.
+    "speedrun",
 ]
 
 
@@ -168,6 +180,8 @@ class AnkiQt(QMainWindow):
     pm: ProfileManagerType
     web: MainWebView
     bottomWeb: BottomWebView
+    # Speedrun (MCAT fork): lazily-created "speedrun" home-state screen object.
+    speedrun_home: SpeedrunHome | None = None
 
     def __init__(
         self,
@@ -662,7 +676,10 @@ class AnkiQt(QMainWindow):
             self.update_undo_actions()
             gui_hooks.collection_did_load(self.col)
             self.apply_collection_options()
-            self.moveToState("deckBrowser")
+            # Speedrun (MCAT fork): land on the branded home instead of the deck
+            # browser. Standard Anki stays reachable via the toolbar "Decks" link
+            # and the "d" shortcut.
+            self.moveToState("speedrun")
         except Exception:
             # dump error to stderr so it gets picked up by errors.py
             traceback.print_exc()
@@ -772,6 +789,14 @@ class AnkiQt(QMainWindow):
     def _deckBrowserState(self, oldState: MainWindowState) -> None:
         self.deckBrowser.show()
 
+    def _speedrunState(self, oldState: MainWindowState) -> None:
+        # Speedrun (MCAT fork): lazily build the home screen and render it.
+        if self.speedrun_home is None:
+            from aqt.speedrun.home import SpeedrunHome
+
+            self.speedrun_home = SpeedrunHome(self)
+        self.speedrun_home.show()
+
     def _selectedDeck(self) -> DeckDict | None:
         did = self.col.decks.selected()
         if not self.col.decks.name_if_exists(did):
@@ -848,6 +873,8 @@ class AnkiQt(QMainWindow):
             dirty = self.overview.op_executed(changes, handler, focused)
         elif self.state == "deckBrowser":
             dirty = self.deckBrowser.op_executed(changes, handler, focused)
+        elif self.state == "speedrun" and self.speedrun_home:
+            dirty = self.speedrun_home.op_executed(changes, handler, focused)
         else:
             dirty = False
 
@@ -871,6 +898,8 @@ class AnkiQt(QMainWindow):
                 self.overview.refresh_if_needed()
             elif self.state == "deckBrowser":
                 self.deckBrowser.refresh_if_needed()
+            elif self.state == "speedrun" and self.speedrun_home:
+                self.speedrun_home.refresh_if_needed()
 
     def fade_out_webview(self) -> None:
         self.web.eval("document.body.style.opacity = 0.3")
@@ -1833,7 +1862,7 @@ title="{}" {}>{}</button>""".format(
 
     def interactiveState(self) -> bool:
         "True if not in profile manager, syncing, etc."
-        return self.state in ("overview", "review", "deckBrowser")
+        return self.state in ("overview", "review", "deckBrowser", "speedrun")
 
     # GC
     ##########################################################################

@@ -19,13 +19,19 @@ from __future__ import annotations
 
 import aqt
 import aqt.main
+import aqt.toolbar
+from aqt import gui_hooks
 from aqt.qt import *
 from aqt.utils import askUser, disable_help_button, restoreGeom, saveGeom, showInfo, tr
 from aqt.webview import AnkiWebView, AnkiWebViewKind
 
+#: Guard so the global toolbar hook is only registered once.
+_toolbar_hook_added = False
+
 
 def setup_speedrun_menu(mw: aqt.main.AnkiQt) -> None:
     """Add the Speedrun submenu to the Tools menu. Idempotent per window."""
+    _ensure_toolbar_home_link()
     if getattr(mw, "_speedrun_menu", None) is not None:
         return
     menu = QMenu(tr.speedrun_menu(), mw)
@@ -43,6 +49,33 @@ def setup_speedrun_menu(mw: aqt.main.AnkiQt) -> None:
     mw.form.menuTools.addMenu(menu)
     # Keep a reference so the menu isn't garbage-collected.
     mw._speedrun_menu = menu  # type: ignore[attr-defined]
+
+
+def _ensure_toolbar_home_link() -> None:
+    """Register the additive top-toolbar hook that adds an MCAT "Home" link.
+
+    Done via ``top_toolbar_did_init_links`` rather than editing
+    ``aqt/toolbar.py`` so the fork stays mergeable. The standard "Decks" link is
+    already present in the toolbar, so standard Anki remains reachable.
+    """
+    global _toolbar_hook_added
+    if _toolbar_hook_added:
+        return
+    gui_hooks.top_toolbar_did_init_links.append(_on_top_toolbar_did_init_links)
+    _toolbar_hook_added = True
+
+
+def _on_top_toolbar_did_init_links(
+    links: list[str], toolbar: aqt.toolbar.Toolbar
+) -> None:
+    home_link = toolbar.create_link(
+        "speedrunHome",
+        tr.speedrun_home_link(),
+        lambda: toolbar.mw.moveToState("speedrun"),
+        tip=tr.speedrun_home_link_tip(),
+        id="speedrunHome",
+    )
+    links.insert(0, home_link)
 
 
 def run_setup(mw: aqt.main.AnkiQt) -> None:

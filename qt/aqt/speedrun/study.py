@@ -9,19 +9,32 @@ on an incorrect answer offers a miss-reason chooser that calls
 ``col.speedrun.record_miss_reason``. Qualifying misses (knowledge-gap /
 missing-context) unsuspend the question's linked cards via the Rust gating RPC;
 the dialog then surfaces how many cards were activated.
+
+The dialog backs both the standalone Tools entry (all served questions) and the
+Tier-2 guided session (Phase 1 "Practice" / Phase 3 "Recap"): the session
+controller injects an explicit question list, a mode/title, and an on-finish
+callback so it can drive the fixed sequence.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from functools import partial
 
 import aqt
 import aqt.main
 from anki.cards import CardId
 from anki.notes import NoteId
-from anki.speedrun import MissReason, correct_index, option_lines
+from anki.speedrun import MissReason, correct_index, option_lines, topic_of_note
 from aqt.qt import *
 from aqt.utils import disable_help_button, restoreGeom, saveGeom, tooltip, tr
+
+# Dialog modes. "standalone" keeps the original Tools→Study behaviour; the two
+# session modes are driven by the guided-session controller.
+MODE_STANDALONE = "standalone"
+MODE_PRACTICE = "practice"
+MODE_RECAP = "recap"
 
 # (MissReason, label, hint) for the four chooser buttons.
 _MISS_BUTTONS = [
@@ -32,33 +45,83 @@ _MISS_BUTTONS = [
 ]
 
 
+@dataclass
+class StudyPhaseResult:
+    """What a study phase produced, handed back to the session controller."""
+
+    #: True if the student reached the end of the injected questions; False if
+    #: they closed the dialog early (i.e. chose to stop the session).
+    completed: bool
+    #: Note ids actually shown this phase (drives recap exclusion).
+    shown_note_ids: list[NoteId] = field(default_factory=list)
+    #: Bare topic names of every question shown this phase.
+    involved_topics: set[str] = field(default_factory=set)
+    #: Bare topic names of questions answered incorrectly this phase.
+    missed_topics: set[str] = field(default_factory=set)
+    answered_count: int = 0
+    correct_count: int = 0
+    activated_total: int = 0
+
+
 class SpeedrunStudyDialog(QDialog):
-    """A minimal but fully working question-first study surface."""
+    """A minimal but fully working question-first study surface.
+
+    Standalone use serves every ``pool::served`` question. The guided session
+    injects ``note_ids`` (a capped, interleaved batch), a ``mode``/``title``, and
+    an ``on_finish`` callback so the controller can advance the fixed sequence.
+    """
 
     TITLE = "speedrunStudy"
 
-    def __init__(self, mw: aqt.main.AnkiQt) -> None:
+    def __init__(
+        self,
+        mw: aqt.main.AnkiQt,
+        *,
+        note_ids: list[NoteId] | None = None,
+        mode: str = MODE_STANDALONE,
+        title: str | None = None,
+        on_finish: Callable[[StudyPhaseResult], None] | None = None,
+        allow_sweep: bool = True,
+    ) -> None:
         QDialog.__init__(self, mw, Qt.WindowType.Window)
         self.mw = mw
         self.mw.garbage_collect_on_dialog_finish(self)
         self._dirty = False
 
-        self.note_ids: list[NoteId] = list(mw.col.speedrun.served_question_note_ids())
+        if note_ids is None:
+            self.note_ids: list[NoteId] = list(
+                mw.col.speedrun.served_question_note_ids()
+            )
+        else:
+            self.note_ids = list(note_ids)
+        self.mode = mode
+        self._on_finish = on_finish
+        # The guided session keeps full control; hide the manual sweep there.
+        self._allow_sweep = allow_sweep and mode == MODE_STANDALONE
         self.index = 0
         self.answered_count = 0
         self.correct_count = 0
         self.activated_total = 0
+
+        # Session tracking surfaced to the controller via StudyPhaseResult.
+        self.shown_note_ids: list[NoteId] = []
+        self.involved_topics: set[str] = set()
+        self.missed_topics: set[str] = set()
+        self._current_topic: str | None = None
+        self._completed = False
+        self._finish_emitted = False
+        self._at_end = False
 
         self._answered_current = False
         self.current_card_id: CardId | None = None
         self.current_correct_index = -1
         self.option_buttons: list[QPushButton] = []
 
-        self.setWindowTitle(tr.speedrun_study_title())
+        self.setWindowTitle(title or tr.speedrun_study_title())
         disable_help_button(self)
         self.setMinimumWidth(560)
         restoreGeom(self, self.TITLE, default_size=(620, 640))
-        self._build_ui()
+        self._build_ui(header=title)
 
         if not self.note_ids:
             self._show_empty_state()
@@ -69,8 +132,15 @@ class SpeedrunStudyDialog(QDialog):
     # UI construction
     ##########################################################################
 
-    def _build_ui(self) -> None:
+    def _build_ui(self, header: str | None = None) -> None:
         outer = QVBoxLayout(self)
+
+        if header:
+            self.header_label = QLabel(header)
+            self.header_label.setStyleSheet(
+                "font-size: 17px; font-weight: 800; margin-bottom: 4px;"
+            )
+            outer.addWidget(self.header_label)
 
         self.progress_label = QLabel()
         self.progress_label.setStyleSheet("font-weight: bold;")
@@ -143,9 +213,17 @@ class SpeedrunStudyDialog(QDialog):
         footer = QHBoxLayout()
         self.sweep_button = QPushButton(tr.speedrun_study_run_sweep())
         qconnect(self.sweep_button.clicked, self._on_sweep)
+        self.sweep_button.setVisible(self._allow_sweep)
         footer.addWidget(self.sweep_button)
         footer.addStretch(1)
-        close_button = QPushButton(tr.actions_close())
+        # In a guided session, closing means "stop the session" rather than just
+        # "close a tool window", so label it accordingly.
+        close_label = (
+            tr.actions_close()
+            if self.mode == MODE_STANDALONE
+            else tr.speedrun_session_stop()
+        )
+        close_button = QPushButton(close_label)
         qconnect(close_button.clicked, self.reject)
         footer.addWidget(close_button)
         outer.addLayout(footer)
@@ -170,13 +248,17 @@ class SpeedrunStudyDialog(QDialog):
         self.next_button.setVisible(False)
         self._clear_options()
 
-        note = self.mw.col.get_note(NoteId(self.note_ids[self.index]))
+        note_id = NoteId(self.note_ids[self.index])
+        note = self.mw.col.get_note(note_id)
         cards = note.cards()
         self.current_card_id = cards[0].id if cards else None
-        topic = next(
-            (t.split("::", 1)[1] for t in note.tags if t.startswith("topic::")),
-            "—",
-        )
+        bare_topic = topic_of_note(note)
+        topic = bare_topic or "—"
+        self._current_topic = bare_topic
+        if note_id not in self.shown_note_ids:
+            self.shown_note_ids.append(note_id)
+        if bare_topic:
+            self.involved_topics.add(bare_topic)
         self.progress_label.setText(
             tr.speedrun_study_progress(
                 current_count=self.index + 1, total_count=len(self.note_ids)
@@ -229,6 +311,8 @@ class SpeedrunStudyDialog(QDialog):
                 "font-weight: bold; font-size: 15px; color: #2e7d32;"
             )
         else:
+            if self._current_topic:
+                self.missed_topics.add(self._current_topic)
             self.result_label.setText(tr.speedrun_study_incorrect())
             self.result_label.setStyleSheet(
                 "font-weight: bold; font-size: 15px; color: #c62828;"
@@ -268,6 +352,10 @@ class SpeedrunStudyDialog(QDialog):
         self._update_tally()
 
     def _on_next(self) -> None:
+        # In a session, the finished screen reuses this button as "Continue".
+        if self._at_end:
+            self.reject()
+            return
         self.index += 1
         if self.index >= len(self.note_ids):
             self._show_finished_state()
@@ -298,6 +386,12 @@ class SpeedrunStudyDialog(QDialog):
         self.progress_label.setText("")
         self.stem_label.setText(tr.speedrun_study_no_questions())
         self.sweep_button.setEnabled(False)
+        if self.mode != MODE_STANDALONE:
+            # Nothing to do this phase; let the controller advance on close.
+            self._completed = True
+            self._at_end = True
+            self.next_button.setText(tr.speedrun_session_continue())
+            self.next_button.setVisible(True)
 
     def _show_finished_state(self) -> None:
         self._clear_options()
@@ -305,14 +399,42 @@ class SpeedrunStudyDialog(QDialog):
         self.explanation_label.setVisible(False)
         self.miss_container.setVisible(False)
         self.activation_label.setVisible(False)
-        self.next_button.setVisible(False)
         self.progress_label.setText("")
         self.topic_label.setText("")
         self.stem_label.setText(tr.speedrun_study_finished())
+        if self.mode == MODE_STANDALONE:
+            self.next_button.setVisible(False)
+            return
+        # Session: reaching the end means this phase completed successfully.
+        self._completed = True
+        self._at_end = True
+        self.next_button.setText(tr.speedrun_session_continue())
+        self.next_button.setVisible(True)
+
+    def _emit_finish(self) -> None:
+        if self._finish_emitted:
+            return
+        self._finish_emitted = True
+        if self._on_finish is None:
+            return
+        self._on_finish(
+            StudyPhaseResult(
+                completed=self._completed,
+                shown_note_ids=list(self.shown_note_ids),
+                involved_topics=set(self.involved_topics),
+                missed_topics=set(self.missed_topics),
+                answered_count=self.answered_count,
+                correct_count=self.correct_count,
+                activated_total=self.activated_total,
+            )
+        )
 
     def reject(self) -> None:
         saveGeom(self, self.TITLE)
-        if self._dirty:
-            # Reflect new revlog entries / activated cards in the main window.
+        # Standalone reflects new revlog entries / activated cards immediately;
+        # in a session the controller owns the next transition, so don't reset
+        # the main window out from under it.
+        if self._dirty and self.mode == MODE_STANDALONE:
             self.mw.reset()
+        self._emit_finish()
         QDialog.reject(self)
