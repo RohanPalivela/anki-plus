@@ -108,13 +108,13 @@ class SpeedrunStudyDialog(QDialog):
         miss_layout.addWidget(self.why_label)
         miss_grid = QHBoxLayout()
         for reason, key, activates in _MISS_BUTTONS:
-            hint = (
+            button = QPushButton(getattr(tr, key)())
+            # Keep the button label terse; the activation behavior is a tooltip.
+            button.setToolTip(
                 tr.speedrun_miss_activates()
                 if activates
                 else tr.speedrun_miss_no_activation()
             )
-            label = f"{getattr(tr, key)()}\n({hint})"
-            button = QPushButton(label)
             qconnect(button.clicked, partial(self._on_miss_reason, reason))
             miss_grid.addWidget(button)
         miss_layout.addLayout(miss_grid)
