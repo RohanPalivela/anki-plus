@@ -422,6 +422,7 @@ def is_sveltekit_page(path: str) -> bool:
         "import-csv",
         "import-page",
         "image-occlusion",
+        "speedrun-dashboard",
     ]
 
 
@@ -765,6 +766,8 @@ exposed_backend_list = [
     # DeckConfigService
     "get_ignored_before_count",
     "get_retention_workload",
+    # SpeedrunService
+    "get_memory_score",
 ]
 
 

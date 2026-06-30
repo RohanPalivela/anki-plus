@@ -12,3 +12,9 @@ test("congrats SvelteKit page loads", async ({ page }) => {
     await page.goto("/congrats");
     await expect(page.locator("body")).toBeAttached();
 });
+
+test("speedrun memory dashboard loads", async ({ page }) => {
+    await page.goto("/speedrun-dashboard");
+    // The Memory tile renders even on an empty collection (abstaining state).
+    await expect(page.locator(".speedrun-dashboard")).toBeAttached();
+});
