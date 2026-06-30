@@ -42,6 +42,10 @@ pub enum BoolKey {
     FsrsLegacyEvaluate,
     LoadBalancerEnabled,
     FsrsShortTermWithStepsEnabled,
+    /// Speedrun (MCAT fork): order the activated-card review queue by
+    /// `value = topic_weight * weakness`. Opt-in; defaults to false so stock
+    /// Anki scheduling is unchanged.
+    SpeedrunOrdering,
     #[strum(to_string = "normalize_note_text")]
     NormalizeNoteText,
     #[strum(to_string = "dayLearnFirst")]

@@ -50,7 +50,10 @@ impl Collection {
     }
 
     /// Unsuspend/unbury cards. Marks the cards as modified.
-    fn unsuspend_or_unbury_searched_cards(&mut self, cards: Vec<Card>) -> Result<()> {
+    /// `pub(crate)` so the Speedrun engine (`crate::speedrun`) can reuse this
+    /// verified, undo-safe queue-restoration path instead of writing queues
+    /// directly.
+    pub(crate) fn unsuspend_or_unbury_searched_cards(&mut self, cards: Vec<Card>) -> Result<()> {
         let usn = self.usn()?;
         for original in cards {
             let mut card = original.clone();

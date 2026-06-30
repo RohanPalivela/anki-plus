@@ -1,0 +1,99 @@
+// Copyright: Ankitects Pty Ltd and contributors
+// License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
+syntax = "proto3";
+
+option java_multiple_files = true;
+
+package anki.speedrun;
+
+import "anki/generic.proto";
+import "anki/collection.proto";
+
+// Speedrun (MCAT fork) engine: question-gated card activation, coverage sweep,
+// and the FSRS-derived Memory model. All RPCs are Rust-implemented (not in
+// FrontendService) so Android (AnkiDroid) shares the same backend.
+service SpeedrunService {
+  // Unsuspends a missed question's linked cards, but only when the miss reason
+  // is a memory problem (KNOWLEDGE_GAP or MISSING_CONTEXT). For every other
+  // reason (including the proto3 default MISS_REASON_UNSPECIFIED) it is a no-op
+  // and returns an empty activated_card_ids list.
+  rpc ActivateCardsForMiss(ActivateCardsForMissRequest)
+      returns (ActivateCardsResponse);
+  // Re-activates a spread of suspended cards across all blueprint topics to
+  // fight info-tunneling. sample_size == 0 (the proto3 default) means "use the
+  // configured default", never "sweep nothing"; the value is clamped to >= 1.
+  rpc RunCoverageSweep(RunCoverageSweepRequest) returns (ActivateCardsResponse);
+  // Returns per-topic FSRS mastery plus an overall point estimate, an
+  // uncertainty range, coverage, and an explicit abstention flag.
+  rpc GetMemoryScore(GetMemoryScoreRequest) returns (MemoryScoreResponse);
+}
+
+// Required pairing for service auto-discovery (get_services). May stay empty;
+// all methods are then forwarded to the Collection implementation.
+service BackendSpeedrunService {}
+
+// Why a practice question was missed. Only KNOWLEDGE_GAP and MISSING_CONTEXT
+// are memory problems that activate the linked flashcards.
+enum MissReason {
+  // Defensive default: an unset field reads back as 0 and must be a no-op.
+  MISS_REASON_UNSPECIFIED = 0;
+  // Didn't know the fact -> activates linked cards.
+  KNOWLEDGE_GAP = 1;
+  // Knew the fact but didn't connect/apply it -> activates linked cards.
+  MISSING_CONTEXT = 2;
+  // Reasoning error, not a memory problem -> no-op.
+  MISUNDERSTANDING = 3;
+  // Slip -> no-op.
+  CARELESS = 4;
+}
+
+message ActivateCardsForMissRequest {
+  // Note id of the missed SpeedrunQuestion note.
+  int64 question_note_id = 1;
+  MissReason miss_reason = 2;
+}
+
+message RunCoverageSweepRequest {
+  // Cards to re-activate per topic. 0 => use the configured default (D-2c),
+  // clamped to a minimum of 1.
+  uint32 sample_size = 1;
+}
+
+message ActivateCardsResponse {
+  collection.OpChanges changes = 1;
+  // Card ids that were unsuspended by this call (empty for no-ops/idempotent
+  // re-runs).
+  repeated int64 activated_card_ids = 2;
+}
+
+message GetMemoryScoreRequest {
+  // Reserved for future scoping (e.g. a deck filter). Empty == whole
+  // collection.
+}
+
+message TopicMastery {
+  // Topic name, i.e. the suffix after the `topic::` tag prefix.
+  string topic = 1;
+  // Stability-weighted mean FSRS retrievability over activated cards (0..1).
+  float mastery = 2;
+  // Number of activated cards with FSRS memory state contributing to mastery.
+  uint32 card_count = 3;
+  // False when no activated cards carry data for this topic (unknown/low).
+  bool known = 4;
+}
+
+message MemoryScoreResponse {
+  repeated TopicMastery topics = 1;
+  // Overall stability-weighted mastery point estimate (0..1).
+  float overall = 2;
+  // 80% uncertainty interval bounds (0..1); widens on thin data.
+  float range_low = 3;
+  float range_high = 4;
+  // Fraction of blueprint topics that have any activated-card data (0..1).
+  float coverage = 5;
+  // Total activated cards with memory state contributing to the score.
+  uint32 graded_count = 6;
+  // True when below the data threshold (D-6): no honest score is emitted.
+  bool abstained = 7;
+}

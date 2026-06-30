@@ -16,6 +16,8 @@ impl QueueBuilder {
         self.gather_due_cards(col, DueCardKind::Learning)?;
         self.gather_due_cards(col, DueCardKind::Review)?;
         self.gather_new_cards(col)?;
+        // Speedrun: stash per-card value for ordering (no-op unless enabled).
+        self.compute_speedrun_values(col)?;
 
         Ok(())
     }

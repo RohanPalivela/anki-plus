@@ -6,6 +6,7 @@ mod gathering;
 pub(crate) mod intersperser;
 pub(crate) mod sized_chain;
 mod sorting;
+mod speedrun_value;
 
 use std::collections::HashMap;
 use std::collections::VecDeque;
@@ -111,6 +112,10 @@ pub(super) struct QueueBuilder {
     limits: LimitTreeMap,
     load_balancer: Option<LoadBalancer>,
     context: Context,
+    /// Speedrun: per-card `topic_weight × weakness` value, filled during
+    /// gathering and used by `sort_by_speedrun_value`. Empty unless ordering is
+    /// enabled.
+    speedrun_values: HashMap<CardId, f32>,
 }
 
 /// Data container and helper for building queues.
@@ -123,6 +128,9 @@ struct Context {
     seen_note_ids: HashMap<NoteId, BuryMode>,
     deck_map: HashMap<DeckId, Deck>,
     fsrs: bool,
+    /// Speedrun ordering inputs (blueprint weights + topic weakness), or `None`
+    /// when `BoolKey::SpeedrunOrdering` is off.
+    speedrun: Option<speedrun_value::SpeedrunQueueContext>,
 }
 
 impl QueueBuilder {
@@ -164,6 +172,10 @@ impl QueueBuilder {
             })
             .transpose()?;
 
+        // Speedrun: load blueprint weights + topic weakness once (no-op/None
+        // unless ordering is enabled).
+        let speedrun = speedrun_value::SpeedrunQueueContext::load(col)?;
+
         Ok(QueueBuilder {
             new: Vec::new(),
             review: Vec::new(),
@@ -171,6 +183,7 @@ impl QueueBuilder {
             day_learning: Vec::new(),
             limits,
             load_balancer,
+            speedrun_values: HashMap::new(),
             context: Context {
                 timing,
                 config_map,
@@ -179,12 +192,15 @@ impl QueueBuilder {
                 seen_note_ids: HashMap::new(),
                 deck_map,
                 fsrs: col.get_config_bool(BoolKey::Fsrs),
+                speedrun,
             },
         })
     }
 
     pub(super) fn build(mut self, learn_ahead_secs: i64) -> CardQueues {
         self.sort_new();
+        // Speedrun: override review/new order by value (no-op unless enabled).
+        self.sort_by_speedrun_value();
 
         // intraday learning and total learn count
         let intraday_learning = sort_learning(self.learning);

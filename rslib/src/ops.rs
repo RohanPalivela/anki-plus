@@ -33,6 +33,9 @@ pub enum Op {
     SetCardDeck,
     SetDueDate,
     GradeNow,
+    // Speedrun (MCAT fork) engine operations.
+    ActivateForMiss,
+    CoverageSweep,
     SetFlag,
     SortCards,
     Suspend,
@@ -98,6 +101,8 @@ impl Op {
             Op::ChangeNotetype => tr.browsing_change_notetype(),
             Op::SkipUndo => return "".to_string(),
             Op::ImageOcclusion => tr.notetypes_image_occlusion_name(),
+            Op::ActivateForMiss => tr.speedrun_activate_for_miss(),
+            Op::CoverageSweep => tr.speedrun_coverage_sweep(),
         }
         .into()
     }

@@ -245,6 +245,7 @@ import anki.notes_pb2
 import anki.notetypes_pb2
 import anki.scheduler_pb2
 import anki.search_pb2
+import anki.speedrun_pb2
 import anki.stats_pb2
 import anki.sync_pb2
 import anki.tags_pb2

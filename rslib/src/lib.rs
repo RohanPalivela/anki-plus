@@ -37,6 +37,7 @@ pub mod scheduler;
 pub mod search;
 pub mod serde;
 pub mod services;
+pub mod speedrun;
 mod stats;
 pub mod storage;
 pub mod sync;

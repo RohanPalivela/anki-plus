@@ -83,6 +83,7 @@ from anki.models import ModelManager, NotetypeDict, NotetypeId
 from anki.notes import Note, NoteId
 from anki.scheduler.dummy import DummyScheduler
 from anki.scheduler.v3 import Scheduler as V3Scheduler
+from anki.speedrun import Speedrun
 from anki.sync import SyncAuth, SyncOutput, SyncStatus
 from anki.tags import TagManager
 from anki.utils import (
@@ -158,6 +159,7 @@ class Collection(DeprecatedNamesMixin):
         self.models = ModelManager(self)
         self.decks = DeckManager(self)
         self.tags = TagManager(self)
+        self.speedrun = Speedrun(self)
         self.conf = ConfigManager(self)
         self._load_scheduler()
         self._startReps = 0

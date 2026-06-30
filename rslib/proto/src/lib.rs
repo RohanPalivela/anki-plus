@@ -33,6 +33,7 @@ protobuf!(notes, "notes");
 protobuf!(notetypes, "notetypes");
 protobuf!(scheduler, "scheduler");
 protobuf!(search, "search");
+protobuf!(speedrun, "speedrun");
 protobuf!(stats, "stats");
 protobuf!(sync, "sync");
 protobuf!(tags, "tags");
