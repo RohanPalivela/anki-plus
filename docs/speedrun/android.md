@@ -18,6 +18,83 @@ risk **R1** (AnkiDroid consumption of `SpeedrunService`).
 
 ---
 
+## 0. Quick start — run the Android app
+
+Two scripts automate the whole thing. They live in this fork under `tools/` and
+assume the three repos are (or will be) **siblings** in one folder:
+
+```
+<parent>/
+├── anki-plus/              ← this fork (desktop + Rust core + SpeedrunService)
+├── Anki-Android/           ← the AnkiDroid app (cloned by the setup script)
+└── Anki-Android-Backend/   ← rsdroid JNI bridge (cloned by the setup script)
+```
+
+### First time on a new machine (installs everything)
+
+```bash
+just android-setup
+# or: ./tools/android-setup
+```
+
+This installs JDK 17 + the Android SDK/NDK/emulator, clones the two external
+repos, points the backend at this fork, builds the backend AAR (with
+`SpeedrunService`) and the AnkiDroid APK, then launches an emulator and installs
+the app. macOS + Homebrew + rustup required. Expect a long first run (multi-GB
+downloads + a full build).
+
+### Day-to-day (dependencies already installed)
+
+```bash
+just android-run              # launch the emulator + (re)install the built app
+just android-run --rebuild    # rebuild backend + app first (after changing Speedrun code)
+```
+
+### Then: the desktop ↔ phone sync demo
+
+1. **Emulator:** on the onboarding screen tap **"Sync from AnkiWeb"** and log in.
+2. **Desktop:** `just run` in `anki-plus`, then Preferences → Syncing → log into
+   the **same** AnkiWeb account → **Sync**.
+3. Change something on one device → Sync → Sync on the other. The MCAT deck and
+   all Speedrun data (`SpeedrunQuestion` notes, `topic::`/`pool::`/`miss::` tags,
+   `revlog`, blueprint config) propagate — they are native Anki objects, so
+   existing sync carries them to the phone, which runs the **same Rust engine**.
+
+> **What this proves vs. not.** This demonstrates the shared engine + full data
+> sync (including all Speedrun objects) on Android. The Speedrun **Kotlin UI**
+> (question surface, score tiles) is not built into AnkiDroid yet — that is the
+> M2 mobile-UI task. The RPCs are present and callable in the app's backend.
+
+### Configuration knobs (env vars for both scripts)
+
+| Var | Default | Meaning |
+| --- | ------- | ------- |
+| `SPEEDRUN_BRANCH` | current branch of this fork | fork branch the backend compiles |
+| `SPEEDRUN_API` | `35` | emulator system-image API level |
+| `SPEEDRUN_AVD` | `speedrun_arm64` | emulator name |
+| `ANDROID_HOME` | `/opt/homebrew/share/android-commandlinetools` | SDK location |
+
+### Gotchas (the scripts handle these; know them anyway)
+
+- **Repos must be siblings** and `Anki-Android-Backend` must **not** be renamed —
+  AnkiDroid hard-codes that path when `local_backend=true`.
+- **Version alignment matters.** This fork is anki `26.05`; the backend targets
+  `anki26.05b1`. That one-version gap makes AnkiDroid `main` fail to compile a
+  non-exhaustive `when` over a proto enum, so the setup script auto-patches
+  `libanki/.../Deck.kt` to add the `Order.RELATIVE_OVERDUENESS` branch. If more
+  enums drift, add branches similarly (or check out an AnkiDroid revision built
+  against the exact anki version).
+- **Apple Silicon → `arm64-v8a`** (fast, native). The backend builds that ABI by
+  default there; use an arm64 system image. Intel hosts get `x86_64`. For a
+  multi-ABI release AAR, build the backend with `ALL_ARCHS=1`.
+- **NDK version is exact** — read from `Anki-Android-Backend/gradle/libs.versions.toml`.
+- **JDK must be 17/21/25** — the backend's Gradle rejects other majors.
+
+The sections below explain the architecture and the manual equivalents of what
+these scripts do.
+
+---
+
 ## 1. Architecture — one Rust core, two native bridges
 
 Desktop and Android share **one** Rust core (`rslib/`, crate `anki`) and **one**

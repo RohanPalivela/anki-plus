@@ -4,9 +4,6 @@
 > AGPL-3.0 fork of [Anki](https://apps.ankiweb.net)**, rebuilt into a
 > question-first study app for the MCAT.
 
-[![Build Status](https://github.com/ankitects/anki/actions/workflows/ci.yml/badge.svg)](https://github.com/ankitects/anki/actions/workflows/ci.yml)
-[![Documentation](https://img.shields.io/badge/docs-dev--docs.ankiweb.net-blue)](https://dev-docs.ankiweb.net)
-
 Anki-Plus keeps Anki's spaced-repetition core and adds, on top of it:
 
 - **Question-gated card activation** — a change inside Anki's **Rust core**
@@ -26,7 +23,9 @@ registered trademark of the AAMC.
 
 - **Desktop:** `just run` (build + launch). See [docs/development.md](./docs/development.md)
   and [docs/build.md](./docs/build.md).
-- **Android:** shares the Rust core via AnkiDroid — see
+- **Android:** shares the Rust core via AnkiDroid. First machine:
+  `just android-setup` (installs deps, builds, launches an emulator).
+  Afterwards: `just android-run`. Full guide:
   [docs/speedrun/android.md](./docs/speedrun/android.md).
 - **Architecture & plan:** [CODEBASE_PRIMER.md](./CODEBASE_PRIMER.md) for the
   map; [Anki_Plan.md](./Anki_Plan.md) for the fork's milestones and contracts.

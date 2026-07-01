@@ -34,6 +34,14 @@ wheels:
 android-check:
     ./tools/android-check
 
+# Speedrun: one-shot Android setup for a NEW machine — installs deps, builds backend+app, launches emulator
+android-setup *args:
+    ./tools/android-setup {{ args }}
+
+# Speedrun: launch the emulator and (re)install the AnkiDroid app (deps already installed; pass --rebuild to rebuild)
+android-run *args:
+    ./tools/android-run {{ args }}
+
 # Speedrun: verify SpeedrunService reached all generated backends (run after `just build`).
 speedrun-codegen-check:
     ./tools/speedrun-codegen-check

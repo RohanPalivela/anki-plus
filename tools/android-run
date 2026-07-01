@@ -1,0 +1,96 @@
+#!/bin/bash
+# Copyright: Ankitects Pty Ltd and contributors
+# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+#
+# Speedrun Android — RUN / REINSTALL (dependencies already installed).
+#
+# Assumes ./tools/android-setup has already run once (SDK, NDK, emulator,
+# sibling repos, and a built APK all exist). This script:
+#   - starts the emulator (creating the AVD if missing)
+#   - installs the already-built AnkiDroid APK
+#   - launches the app
+#
+# With --rebuild it first refreshes the fork copy, rebuilds the backend AAR and
+# the APK before installing (use this after changing Speedrun code).
+#
+# Env overrides: SPEEDRUN_AVD, SPEEDRUN_API, SPEEDRUN_BRANCH, ANDROID_HOME.
+# Usage:
+#   ./tools/android-run              # launch emulator + (re)install existing APK
+#   ./tools/android-run --rebuild    # rebuild backend + app first, then install
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FORK_ROOT="$(dirname "$SCRIPT_DIR")"
+SIBLINGS="$(dirname "$FORK_ROOT")"
+ANDROID="$SIBLINGS/Anki-Android"
+BACKEND="$SIBLINGS/Anki-Android-Backend"
+
+API="${SPEEDRUN_API:-35}"
+AVD="${SPEEDRUN_AVD:-speedrun_arm64}"
+FORK_BRANCH="${SPEEDRUN_BRANCH:-$(git -C "$FORK_ROOT" rev-parse --abbrev-ref HEAD)}"
+REBUILD=0
+[ "${1:-}" = "--rebuild" ] && REBUILD=1
+
+log() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
+die() { printf '\033[1;31merror: %s\033[0m\n' "$*" >&2; exit 1; }
+
+if [ "$(uname -m)" = "arm64" ]; then ABI="arm64-v8a"; else ABI="x86_64"; fi
+SYSIMG="system-images;android-${API};google_apis;${ABI}"
+APK="$ANDROID/AnkiDroid/build/outputs/apk/full/debug/AnkiDroid-full-${ABI}-debug.apk"
+
+# --- environment -------------------------------------------------------------
+export JAVA_HOME="${JAVA_HOME:-$(brew --prefix openjdk@17 2>/dev/null)/libexec/openjdk.jdk/Contents/Home}"
+export ANDROID_HOME="${ANDROID_HOME:-/opt/homebrew/share/android-commandlinetools}"
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$HOME/.cargo/bin:$PATH"
+
+command -v emulator >/dev/null || die "emulator not found. Run ./tools/android-setup first."
+command -v adb >/dev/null || die "adb not found. Run ./tools/android-setup first."
+[ -d "$BACKEND" ] && [ -d "$ANDROID" ] || die "sibling repos missing. Run ./tools/android-setup first."
+
+# --- optional rebuild --------------------------------------------------------
+if [ "$REBUILD" -eq 1 ]; then
+    log "Refreshing fork copy the backend compiles ($FORK_BRANCH)"
+    if [ -d "$BACKEND/anki/.git" ]; then
+        git -C "$BACKEND/anki" fetch -q origin "$FORK_BRANCH" && git -C "$BACKEND/anki" checkout -q "$FORK_BRANCH" && git -C "$BACKEND/anki" pull -q || true
+    else
+        rm -rf "$BACKEND/anki"; git clone -q -b "$FORK_BRANCH" "$FORK_ROOT" "$BACKEND/anki"
+    fi
+    log "Rebuilding backend AAR"
+    ( cd "$BACKEND" && ./build.sh )
+    log "Rebuilding APK"
+    printf 'sdk.dir=%s\nlocal_backend=true\n' "$ANDROID_HOME" > "$ANDROID/local.properties"
+    ( cd "$ANDROID" && ./gradlew :AnkiDroid:assembleDebug )
+fi
+
+[ -f "$APK" ] || die "APK not found: $APK
+Run ./tools/android-setup (first time) or ./tools/android-run --rebuild."
+
+# --- create AVD if needed ----------------------------------------------------
+if ! emulator -list-avds | grep -qx "$AVD"; then
+    log "Creating AVD '$AVD' ($SYSIMG)"
+    echo no | avdmanager create avd -n "$AVD" -k "$SYSIMG" -d pixel_6
+fi
+
+# --- start emulator if not already running -----------------------------------
+if ! adb devices | grep -q "emulator-"; then
+    log "Starting emulator '$AVD'"
+    emulator -avd "$AVD" -no-snapshot -gpu auto >/dev/null 2>&1 &
+fi
+
+log "Waiting for the emulator to boot"
+adb wait-for-device
+until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do sleep 2; done
+
+# --- install + launch --------------------------------------------------------
+log "Installing $(basename "$APK")"
+adb install -r "$APK"
+
+log "Launching AnkiDroid"
+adb shell am start -n com.ichi2.anki.debug/com.ichi2.anki.IntentHandler >/dev/null
+
+echo
+echo "AnkiDroid is running on the shared Speedrun engine."
+echo "To demo sync: log into the same AnkiWeb account on the emulator"
+echo "(Sync from AnkiWeb) and on the desktop fork (just run -> Sync)."
