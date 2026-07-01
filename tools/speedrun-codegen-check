@@ -1,0 +1,59 @@
+#!/bin/bash
+# Copyright: Ankitects Pty Ltd and contributors
+# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+#
+# Verify that SpeedrunService made it through protobuf codegen into the
+# artifacts every client (desktop Python, web TS, and — via the same
+# descriptor pool — AnkiDroid's JNI/Kotlin backend) consumes.
+#
+# Run AFTER `just build` (or `just check`), which regenerates out/.
+# This is a fast, read-only sanity check; it does not build anything.
+
+set -euo pipefail
+
+DESCRIPTORS="out/rslib/proto/descriptors.bin"
+PY_BACKEND="out/pylib/anki/_backend_generated.py"
+TS_BACKEND="out/ts/lib/generated/backend.ts"
+
+fail=0
+
+check() {
+    local label="$1" file="$2" needle="$3"
+    if [ ! -f "$file" ]; then
+        echo "MISSING  $label: $file not found (run 'just build' first)"
+        fail=1
+        return
+    fi
+    if grep -qi "$needle" "$file"; then
+        echo "ok       $label ($file)"
+    else
+        echo "FAIL     $label: '$needle' not found in $file"
+        fail=1
+    fi
+}
+
+echo "Speedrun codegen verification"
+echo
+
+# Descriptor pool: the source of truth for service/method indices that
+# AnkiDroid's generated client must match.
+check "descriptor pool has SpeedrunService" "$DESCRIPTORS" "SpeedrunService"
+
+# Desktop Python backend.
+check "python backend has activate_cards_for_miss" "$PY_BACKEND" "activate_cards_for_miss"
+check "python backend has get_memory_score" "$PY_BACKEND" "get_memory_score"
+
+# Web TS backend (same contract Kotlin regenerates from).
+check "ts backend has activateCardsForMiss" "$TS_BACKEND" "activateCardsForMiss"
+
+echo
+if [ "$fail" -eq 0 ]; then
+    echo "PASS: SpeedrunService is exposed in all generated backends."
+    echo "AnkiDroid can regenerate its Kotlin/JNI client from the same"
+    echo "descriptor pool ($DESCRIPTORS)."
+else
+    echo "One or more checks failed. If you edited proto/anki/speedrun.proto,"
+    echo "run a FULL build ('just check' / 'just build') — cargo check alone"
+    echo "will not regenerate bindings."
+    exit 1
+fi

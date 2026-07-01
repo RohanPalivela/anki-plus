@@ -30,6 +30,14 @@ rebuild-web:
 wheels:
     {{ ninja }} wheels
 
+# Speedrun: cross-compile the shared Rust core for Android (needs ANDROID_NDK_HOME; see docs/speedrun/android.md)
+android-check:
+    ./tools/android-check
+
+# Speedrun: verify SpeedrunService reached all generated backends (run after `just build`).
+speedrun-codegen-check:
+    ./tools/speedrun-codegen-check
+
 # Build and run all checks (lint + test) - lets ninja handle dependencies
 check:
     {{ ninja }} pylib qt check

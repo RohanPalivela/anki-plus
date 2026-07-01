@@ -13,6 +13,7 @@ contributing
 testing-coverage
 architecture
 protobuf
+speedrun/android
 ```
 
 ## Auto-generated API References

@@ -1,0 +1,111 @@
+#!/bin/bash
+# Copyright: Ankitects Pty Ltd and contributors
+# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+#
+# Speedrun mobile smoke check.
+#
+# Cross-compiles the shared Rust core (crate `anki`, in rslib/) for Android
+# target(s) so we can prove the engine + the new SpeedrunService module compile
+# for the ABIs AnkiDroid ships, WITHOUT needing the external AnkiDroid/rsdroid
+# repo. This is the in-repo half of M1 1c ("ensure rslib compiles for Android
+# targets and SpeedrunService is exposed through the generated backend").
+#
+# This does NOT produce a loadable JNI .so or an APK — that lives in the
+# external AnkiDroid repo (see docs/speedrun/android.md, Risk R1).
+#
+# Requirements:
+#   - Android NDK, pointed to by ANDROID_NDK_HOME (or ANDROID_NDK_ROOT).
+#     Install via `sdkmanager --install "ndk;26.1.10909125"` or Android Studio.
+#   - rustup (targets are added automatically below).
+#
+# Usage:
+#   ./tools/android-check                 # builds the default target(s)
+#   ANDROID_TARGETS="aarch64-linux-android x86_64-linux-android" ./tools/android-check
+#   ANDROID_API=24 ./tools/android-check
+
+set -euo pipefail
+
+# ABIs AnkiDroid ships. Default to the 64-bit ARM target (real devices);
+# override with ANDROID_TARGETS to add armv7/x86_64 (emulator) etc.
+DEFAULT_TARGETS="aarch64-linux-android"
+TARGETS=${ANDROID_TARGETS:-$DEFAULT_TARGETS}
+API=${ANDROID_API:-24}
+
+NDK=${ANDROID_NDK_HOME:-${ANDROID_NDK_ROOT:-}}
+if [ -z "$NDK" ] || [ ! -d "$NDK" ]; then
+    cat >&2 <<'EOF'
+error: Android NDK not found.
+
+Set ANDROID_NDK_HOME (or ANDROID_NDK_ROOT) to your NDK install, e.g.:
+
+    export ANDROID_NDK_HOME="$HOME/Library/Android/sdk/ndk/26.1.10909125"
+
+Install the NDK with Android Studio's SDK Manager, or:
+
+    sdkmanager --install "ndk;26.1.10909125"
+
+See docs/speedrun/android.md for the full mobile setup.
+EOF
+    exit 1
+fi
+
+# Locate the NDK's prebuilt LLVM toolchain for this host.
+case "$(uname -s)" in
+    Darwin) HOST_TAG="darwin-x86_64" ;;
+    Linux)  HOST_TAG="linux-x86_64" ;;
+    *)      echo "error: unsupported host OS $(uname -s)" >&2; exit 1 ;;
+esac
+
+TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/$HOST_TAG"
+if [ ! -d "$TOOLCHAIN" ]; then
+    echo "error: NDK toolchain not found at $TOOLCHAIN" >&2
+    echo "       (is ANDROID_NDK_HOME pointing at a valid NDK r23+?)" >&2
+    exit 1
+fi
+
+BIN="$TOOLCHAIN/bin"
+export AR="$BIN/llvm-ar"
+export RANLIB="$BIN/llvm-ranlib"
+
+echo "Speedrun Android smoke check"
+echo "  NDK:      $NDK"
+echo "  API:      $API"
+echo "  targets:  $TARGETS"
+echo
+
+for TARGET in $TARGETS; do
+    echo "==> $TARGET"
+
+    # The NDK clang wrapper embeds the target triple + API level.
+    case "$TARGET" in
+        aarch64-linux-android)   CLANG_PREFIX="aarch64-linux-android" ;;
+        armv7-linux-androideabi) CLANG_PREFIX="armv7a-linux-androideabi" ;;
+        x86_64-linux-android)    CLANG_PREFIX="x86_64-linux-android" ;;
+        i686-linux-android)      CLANG_PREFIX="i686-linux-android" ;;
+        *) echo "error: unknown Android target $TARGET" >&2; exit 1 ;;
+    esac
+
+    CLANG="$BIN/${CLANG_PREFIX}${API}-clang"
+    if [ ! -x "$CLANG" ]; then
+        echo "error: clang wrapper not found: $CLANG" >&2
+        echo "       try a different ANDROID_API (installed wrappers: )" >&2
+        ls "$BIN" | grep -E "${CLANG_PREFIX}[0-9]+-clang$" >&2 || true
+        exit 1
+    fi
+
+    rustup target add "$TARGET" >/dev/null
+
+    # cargo picks up per-target CC/linker from these env vars.
+    TARGET_UPPER=$(echo "$TARGET" | tr 'a-z-' 'A-Z_')
+    export "CC_${TARGET}=$CLANG"
+    export "CARGO_TARGET_${TARGET_UPPER}_LINKER=$CLANG"
+
+    # Build only the shared core; the desktop-only rsbridge (PyO3) is skipped.
+    cargo build -p anki --target "$TARGET"
+    echo "    ok: anki (incl. speedrun module) compiles for $TARGET"
+    echo
+done
+
+echo "Android smoke check passed. The shared engine + SpeedrunService compile"
+echo "for Android. Next: pin this fork's rslib in AnkiDroid and regenerate its"
+echo "JNI/protobuf backend (see docs/speedrun/android.md)."
