@@ -14,6 +14,7 @@ speedrun-menu = Speedrun (MCAT)
 speedrun-setup-action = Set up Speedrun (MCAT)…
 speedrun-study-action = Study (question-first)…
 speedrun-dashboard-action = Memory dashboard…
+speedrun-import-bank-action = Import question bank…
 
 ## Setup.
 
@@ -28,6 +29,17 @@ speedrun-setup-demo-summary =
     { $cardCount } linked flashcards.
 speedrun-setup-demo-skipped = Demo data was already present, so it was left unchanged.
 speedrun-setup-no-collection = Please open a collection first.
+
+## Question bank import (real, legally reusable MCAT-relevant questions).
+
+speedrun-import-bank-running = Importing question bank…
+speedrun-import-bank-complete =
+    Imported { $importedCount } new question(s); { $skippedCount } were already present.
+speedrun-import-bank-synced =
+    Stored as native notes — they will sync to your other devices automatically.
+speedrun-import-bank-breakdown = Sources: { $sources }. Topics: { $topics }.
+speedrun-import-bank-empty =
+    No question bank file was found to import.
 speedrun-reset-action = Reset demo data…
 speedrun-reset-confirm =
     Delete and re-create the synthetic demo data? This re-suspends the demo

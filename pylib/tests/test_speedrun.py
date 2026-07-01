@@ -4,10 +4,14 @@
 from anki.consts import QUEUE_TYPE_SUSPENDED
 from anki.decks import DeckId
 from anki.speedrun import (
+    BANK_AI_GENERATED_TAG,
+    BANK_TAG,
+    DEFAULT_BANK_PATH,
     QUESTION_FIELDS,
     QUESTION_NOTETYPE_NAME,
     QUESTIONS_DECK_NAME,
     MissReason,
+    load_question_bank,
 )
 from tests.shared import getEmptyCol
 
@@ -140,6 +144,88 @@ def test_question_first_loop_miss_activates_linked_cards():
     noop = col.speedrun.record_miss_reason(int(served[1]), MissReason.CARELESS)
     assert list(noop.activated_card_ids) == []
     assert "miss::careless" in col.get_note(served[1]).tags
+
+
+def _sample_bank() -> list[dict]:
+    return [
+        {
+            "uid": "test-bio-1",
+            "stem": "Which organelle is the primary site of ATP synthesis?",
+            "options": ["Nucleus", "Mitochondrion", "Ribosome", "Golgi apparatus"],
+            "correct": "B",
+            "explanation": "Mitochondria carry out oxidative phosphorylation.",
+            "topics": ["biology"],
+            "pool": "served",
+            "source": "MMLU — college biology",
+            "license": "MIT",
+            "origin": "mmlu",
+            "difficulty_b": 0.0,
+            "discrimination_a": 1.0,
+            "ai_generated": False,
+        },
+        {
+            "uid": "test-phys-1",
+            "stem": "A block slides down a frictionless incline. Its acceleration is?",
+            "options": ["Zero", "g sin(theta)", "g", "g cos(theta)"],
+            "correct": "B",
+            "explanation": "",
+            "topics": ["physics"],
+            "pool": "heldout",
+            "source": "OpenMCAT — C/P bank",
+            "license": "AGPL-3.0",
+            "origin": "openmcat",
+            "difficulty_b": 1.0,
+            "discrimination_a": 1.2,
+            "ai_generated": True,
+        },
+    ]
+
+
+def test_import_question_bank_is_native_split_and_idempotent():
+    col = getEmptyCol()
+    col.speedrun.setup_mcat(load_demo_data=False)
+
+    summary = col.speedrun.import_question_bank(questions=_sample_bank())
+    assert summary.imported == 2
+    assert summary.skipped_existing == 0
+    assert summary.by_origin == {"mmlu": 1, "openmcat": 1}
+    assert summary.by_pool == {"served": 1, "heldout": 1}
+
+    # Stored as native SpeedrunQuestion notes; held-out is never served (D-8).
+    served = col.speedrun.served_question_note_ids()
+    assert len(served) == 1
+    note = col.get_note(served[0])
+    assert note.note_type()["name"] == QUESTION_NOTETYPE_NAME
+    assert BANK_TAG in note.tags
+    assert "topic::biology" in note.tags
+    assert note["correct"] == "B"
+
+    # AI-generated third-party content is honestly tagged for the M2 eval gate.
+    assert len(col.find_notes(f"tag:{BANK_AI_GENERATED_TAG}")) == 1
+
+    # Re-import adds nothing (idempotent -> conflict-free sync, no duplicates).
+    note_count = col.db.scalar("select count() from notes")
+    summary2 = col.speedrun.import_question_bank(questions=_sample_bank())
+    assert summary2.imported == 0
+    assert summary2.skipped_existing == 2
+    assert col.db.scalar("select count() from notes") == note_count
+
+
+def test_vendored_question_bank_ships_and_imports():
+    # The generated (gzipped) bank must ship next to the module and be well-formed.
+    assert DEFAULT_BANK_PATH.exists()
+    data = load_question_bank()
+    assert data["questions"], "vendored bank should be non-empty"
+    assert data["attribution"], "vendored bank must carry source attribution"
+
+    col = getEmptyCol()
+    col.speedrun.setup_mcat(load_demo_data=False)
+    subset = data["questions"][:25]
+    summary = col.speedrun.import_question_bank(
+        questions=subset, attribution=data["attribution"]
+    )
+    assert summary.imported == 25
+    assert summary.attribution
 
 
 def test_memory_dashboard_populated_after_demo():

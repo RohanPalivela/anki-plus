@@ -3,13 +3,15 @@
 
 """Speedrun (MCAT fork) desktop entry points.
 
-Adds a Tools → "Speedrun (MCAT)" submenu wiring up three actions:
+Adds a Tools → "Speedrun (MCAT)" submenu wiring up these actions:
 
 * **Set up Speedrun (MCAT)** — runtime data-model provisioning (D-13) plus an
   optional synthetic demo dataset.
 * **Study (question-first)** — the SPOV3 gating loop (see :mod:`aqt.speedrun.study`).
 * **Memory dashboard** — the FSRS-derived Memory tile (Svelte) with M3
   placeholders for Performance/Readiness.
+* **Import question bank** — one-time import of the vendored, legally reusable
+  MCAT-relevant question bank as native notes (which then sync to every device).
 
 This module is additive and fork-specific; it is wired in from
 ``AnkiQt.setupMenus`` with a single call to :func:`setup_speedrun_menu`.
@@ -44,6 +46,10 @@ def setup_speedrun_menu(mw: aqt.main.AnkiQt) -> None:
 
     dashboard_action = menu.addAction(tr.speedrun_dashboard_action())
     qconnect(dashboard_action.triggered, lambda: open_dashboard(mw))
+
+    menu.addSeparator()
+    import_bank_action = menu.addAction(tr.speedrun_import_bank_action())
+    qconnect(import_bank_action.triggered, lambda: run_import_bank(mw))
 
     menu.addSeparator()
     reset_action = menu.addAction(tr.speedrun_reset_action())
@@ -124,6 +130,47 @@ def run_setup(mw: aqt.main.AnkiQt) -> None:
                 question_count=summary.questions_created, card_count=total_cards
             )
         )
+    showInfo("\n".join(lines), parent=mw, title=tr.speedrun_menu())
+
+
+def run_import_bank(mw: aqt.main.AnkiQt) -> None:
+    """Import the vendored real question bank as native notes (one-time; syncs).
+
+    Idempotent — re-running only adds items not already present, so it is safe to
+    run again after the bank has grown or synced from another device.
+    """
+    if not mw.col:
+        showInfo(tr.speedrun_setup_no_collection(), parent=mw)
+        return
+
+    mw.progress.start(label=tr.speedrun_import_bank_running(), immediate=True)
+    summary = None
+    try:
+        summary = mw.col.speedrun.import_question_bank()
+    except FileNotFoundError:
+        summary = None
+    finally:
+        mw.progress.finish()
+    if summary is None:
+        showInfo(tr.speedrun_import_bank_empty(), parent=mw, title=tr.speedrun_menu())
+        return
+    mw.reset()
+
+    lines = [
+        tr.speedrun_import_bank_complete(
+            imported_count=summary.imported, skipped_count=summary.skipped_existing
+        ),
+        tr.speedrun_import_bank_synced(),
+    ]
+    if summary.imported:
+        sources = ", ".join(
+            f"{origin} ({count})" for origin, count in sorted(summary.by_origin.items())
+        )
+        topics = ", ".join(
+            f"{topic} ({count})" for topic, count in sorted(summary.by_topic.items())
+        )
+        lines.append("")
+        lines.append(tr.speedrun_import_bank_breakdown(sources=sources, topics=topics))
     showInfo("\n".join(lines), parent=mw, title=tr.speedrun_menu())
 
 
