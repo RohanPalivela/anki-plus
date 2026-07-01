@@ -836,6 +836,10 @@ def _check_dynamic_request_permissions():
         "/_anki/setSchedulingStates",
         "/_anki/i18nResources",
         "/_anki/congratsInfo",
+        # Speedrun (MCAT) home renders in the main webview (mw.web), which has no
+        # API access; its read-only Memory snapshot must be whitelisted like
+        # congratsInfo so the home can load without the Bearer token.
+        "/_anki/getMemoryScore",
     ):
         pass
     else:
