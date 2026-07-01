@@ -11,22 +11,28 @@ Two responsibilities live here:
    gated activation.
 2. Desktop data-model provisioning (D-13): idempotently create the
    ``SpeedrunQuestion`` notetype, the ``Speedrun::Questions`` deck, and a
-   starter MCAT ``speedrunBlueprint`` config, plus an optional, clearly
-   *synthetic* demo dataset so the question-first gating loop and the Memory
-   dashboard are demoable end-to-end. The engine's activation/mastery logic is
-   *not* re-implemented here — we only create native objects and call the
-   frozen RPCs.
+   starter MCAT ``speedrunBlueprint`` config. The engine's activation/mastery
+   logic is *not* re-implemented here — we only create native objects and call
+   the frozen RPCs.
 3. Real question-bank import (D-4): a one-time, idempotent import of a vendored,
    legally reusable MCAT-relevant question bank (see ``import_question_bank``)
    into native ``SpeedrunQuestion`` notes. Because they are native objects, a
-   single desktop import syncs to Android/other devices for free (D-2).
+   single desktop import syncs to Android/other devices for free (D-2). The
+   imported bank is the *only* source of served practice questions — there is
+   no synthetic/demo content, and the study loop is gated on having imported it.
+4. First-principles memory cards (D-2a): the questions only *grade*; they gate
+   the activation of linked memory flashcards. Those are original, hand-authored
+   first-principles cards (see ``import_first_principles``) that teach the
+   concept a family of questions tests — never a restatement of a specific bank
+   item, and not part of the served/heldout question set. They link to questions
+   by a shared ``topic::`` tag and are imported suspended until a related miss
+   activates them.
 """
 
 from __future__ import annotations
 
 import gzip
 import json
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -80,9 +86,11 @@ FLASHCARDS_DECK_NAME = "Speedrun::Cards"
 TOPIC_TAG_PREFIX = "topic::"
 POOL_SERVED_TAG = "pool::served"
 POOL_HELDOUT_TAG = "pool::heldout"
-#: Marker tag applied to every synthetic demo note so seeding is idempotent and
-#: the demo content is trivially findable/removable. Never ship as real content.
-DEMO_TAG = "speedrun-demo"
+#: Legacy marker tag from the old synthetic demo dataset. No new demo content is
+#: ever created; this is kept only so :meth:`Speedrun.purge_demo_data` can find
+#: and delete any synthetic notes left in a collection provisioned by an older
+#: build (D-10 / D-16: synthetic placeholders must never masquerade as content).
+LEGACY_DEMO_TAG = "speedrun-demo"
 
 # Real question-bank import (D-4 / D-16) ---------------------------------------
 #
@@ -124,10 +132,50 @@ def load_question_bank(path: str | Path | None = None) -> dict[str, Any]:
     with open(bank_path, encoding="utf-8") as fh:
         return json.load(fh)
 
+
+# First-principles memory cards (D-2a linked flashcards) -----------------------
+#
+# The imported questions only *grade* the student; they gate the activation of
+# linked *memory flashcards*. Those cards are original, hand-authored MCAT
+# first-principles items (vendored next to this module) that teach the concept a
+# family of questions tests — they deliberately never restate a specific bank
+# question and are not part of the served/heldout question set. They link to
+# questions purely by a shared ``topic::`` tag, are imported as *suspended*
+# Basic notes into ``Speedrun::Cards``, and are unsuspended only when a related
+# question is missed for a memory reason (or by a coverage sweep).
+
+#: Notetype used for the linked memory cards (stock two-field Basic).
+FLASHCARD_NOTETYPE_NAME = "Basic"
+#: Marker tag on every first-principles card (find/remove/report the whole set).
+FIRST_PRINCIPLES_TAG = "speedrun-first-principles"
+#: Per-card stable id tag, used to make re-import idempotent (never duplicates).
+FIRST_PRINCIPLES_UID_TAG_PREFIX = "fpuid::"
+#: Fine-grained concept tag (e.g. ``concept::electrochemistry``) for auditing.
+CONCEPT_TAG_PREFIX = "concept::"
+#: Vendored, hand-authored first-principles dataset shipped next to this module.
+DEFAULT_FIRST_PRINCIPLES_PATH = (
+    Path(__file__).parent / "data" / "speedrun_first_principles.json"
+)
+
+
+def load_first_principles(path: str | Path | None = None) -> dict[str, Any]:
+    """Load and parse the vendored first-principles card dataset.
+
+    Kept module-level so tests and tooling can read the set without a
+    collection. ``path`` defaults to the vendored JSON.
+    """
+    fp_path = Path(path) if path is not None else DEFAULT_FIRST_PRINCIPLES_PATH
+    with open(fp_path, encoding="utf-8") as fh:
+        return json.load(fh)
+
 # Config keys (must match rslib/src/speedrun/blueprint.rs + config/bool.rs).
 BLUEPRINT_CONFIG_KEY = "speedrunBlueprint"
 SWEEP_SAMPLE_SIZE_CONFIG_KEY = "speedrunSweepSampleSize"
 ORDERING_CONFIG_KEY = "speedrunOrdering"
+#: Persisted paused guided-session progress (written by ``aqt.speedrun.session``).
+#: Defined here so both the session controller and :meth:`Speedrun.reset_profile`
+#: refer to the same key.
+SESSION_STATE_CONFIG_KEY = "speedrunSessionState"
 
 # Guided-session per-phase caps (Tier 2). Tunable via collection config so the
 # fixed sequence never floods the student (adaptive/capped sizing). Defaults are
@@ -176,11 +224,13 @@ class SetupSummary:
     questions_deck_id: int
     flashcards_deck_id: int
     blueprint_topics: int
-    demo_loaded: bool
-    demo_already_present: bool = False
-    questions_created: int = 0
-    suspended_flashcards_created: int = 0
-    studied_flashcards_created: int = 0
+    #: True once the real question bank has been imported (served questions
+    #: exist). Practice is gated on this being true.
+    bank_imported: bool = False
+    #: Number of served practice questions currently available.
+    served_question_count: int = 0
+    #: How many leftover synthetic demo notes were purged during setup.
+    demo_notes_removed: int = 0
 
 
 @dataclass
@@ -194,6 +244,34 @@ class BankImportSummary:
     by_pool: dict[str, int] = field(default_factory=dict)
     by_topic: dict[str, int] = field(default_factory=dict)
     attribution: list[dict[str, str]] = field(default_factory=list)
+
+
+@dataclass
+class FirstPrinciplesImportSummary:
+    """Outcome of importing the first-principles memory cards."""
+
+    total: int = 0
+    imported: int = 0
+    skipped_existing: int = 0
+    suspended: int = 0
+    by_topic: dict[str, int] = field(default_factory=dict)
+
+
+@dataclass
+class ResetProfileSummary:
+    """Outcome of resetting the learner's Speedrun progress.
+
+    The imported question bank and memory cards are always kept; only the
+    learner's *progress* (activation + FSRS review history + any paused session)
+    is cleared.
+    """
+
+    #: Memory cards that were active (unsuspended) and got returned to suspended.
+    cards_resuspended: int = 0
+    #: Memory cards that had scheduling/FSRS history that was cleared.
+    cards_forgotten: int = 0
+    #: Whether a paused guided-session state was cleared.
+    session_cleared: bool = False
 
 
 def topic_of_note(note: Note) -> str | None:
@@ -295,17 +373,17 @@ class Speedrun:
     def setup_mcat(
         self,
         *,
-        load_demo_data: bool = True,
         enable_value_ordering: bool = True,
     ) -> SetupSummary:
         """Idempotently provision the Speedrun data model for MCAT.
 
         Creates the ``SpeedrunQuestion`` notetype, the ``Speedrun::Questions``
         and ``Speedrun::Cards`` decks, and the starter blueprint config; turns
-        on value ordering; and optionally loads the synthetic demo dataset.
+        on value ordering; and purges any leftover synthetic demo data from an
+        older build. Real practice questions come exclusively from
+        :meth:`import_question_bank` — setup never creates placeholder content.
 
-        Re-running is safe: existing objects are reused and demo seeding is
-        skipped if it has already run.
+        Re-running is safe: existing objects are reused.
         """
         notetype_id = self.ensure_question_notetype()
         questions_deck, flashcards_deck = self.ensure_decks()
@@ -324,30 +402,37 @@ class Speedrun:
             # Opt into value = topic_weight x weakness ordering of activated cards.
             self.col.set_config(ORDERING_CONFIG_KEY, True)
 
-        summary = SetupSummary(
+        demo_removed = self.purge_demo_data()
+
+        return SetupSummary(
             notetype_id=int(notetype_id),
             questions_deck_id=int(questions_deck),
             flashcards_deck_id=int(flashcards_deck),
             blueprint_topics=len(blueprint.get("topics", [])),
-            demo_loaded=False,
+            bank_imported=self.has_question_bank(),
+            served_question_count=len(self.served_question_note_ids()),
+            demo_notes_removed=demo_removed,
         )
-        if load_demo_data:
-            self._seed_demo_data(
-                notetype_id, questions_deck, flashcards_deck, blueprint, summary
-            )
-        return summary
 
-    def reset_demo(self) -> SetupSummary:
-        """Delete the synthetic demo data and recreate it fresh, so question-
-        gated activation can be demonstrated from scratch (the gating flashcards
-        are suspended again). Only demo objects (tagged ``DEMO_TAG``) are
-        removed; the notetype, decks, blueprint, and any non-demo cards are
-        preserved.
+    def has_question_bank(self) -> bool:
+        """True once the real question bank has been imported (served questions
+        exist). The study loop is gated on this so students never practise
+        against an empty or synthetic pool."""
+        return bool(self.col.find_notes(f"tag:{BANK_TAG} tag:{POOL_SERVED_TAG}"))
+
+    def purge_demo_data(self) -> int:
+        """Delete every leftover synthetic demo note (tagged ``LEGACY_DEMO_TAG``)
+        and return how many were removed.
+
+        No synthetic content is created anymore; this only cleans up collections
+        that were provisioned by an older build so the study loop serves real
+        imported questions exclusively. Idempotent and cheap when nothing
+        matches.
         """
-        demo_notes = list(self.col.find_notes(f"tag:{DEMO_TAG}"))
+        demo_notes = list(self.col.find_notes(f"tag:{LEGACY_DEMO_TAG}"))
         if demo_notes:
             self.col.remove_notes(demo_notes)
-        return self.setup_mcat(load_demo_data=True)
+        return len(demo_notes)
 
     def import_question_bank(
         self,
@@ -396,6 +481,114 @@ class Speedrun:
             for topic in item.get("topics", []):
                 summary.by_topic[topic] = summary.by_topic.get(topic, 0) + 1
         return summary
+
+    def import_first_principles(
+        self,
+        path: str | Path | None = None,
+        *,
+        cards: list[dict[str, Any]] | None = None,
+        suspend: bool = True,
+    ) -> FirstPrinciplesImportSummary:
+        """Import the vendored first-principles memory cards as native, suspended
+        ``Basic`` notes in ``Speedrun::Cards`` (D-2a linked flashcards).
+
+        These are the activation *targets*: linked to questions by a shared
+        ``topic::`` tag, they stay suspended until a related question is missed
+        for a memory reason. Idempotent via a per-card ``fpuid::`` tag, so
+        re-running — or running after they have synced from another device —
+        never duplicates. Pass ``cards`` to import an in-memory list (tests);
+        otherwise the JSON at ``path`` (default: the vendored set) is read.
+        """
+        if cards is None:
+            cards = load_first_principles(path).get("cards", [])
+
+        _, flashcards_deck = self.ensure_decks()
+        basic = self.col.models.by_name(FLASHCARD_NOTETYPE_NAME)
+        assert basic is not None, "stock Basic notetype must exist"
+
+        existing = self._existing_first_principles_uids()
+        summary = FirstPrinciplesImportSummary(total=len(cards))
+        new_card_ids: list[Any] = []
+        for item in cards:
+            uid = str(item.get("uid", "")).strip()
+            if not uid or uid in existing:
+                summary.skipped_existing += 1
+                continue
+            note = self.col.new_note(basic)
+            note["Front"] = str(item.get("front", ""))
+            note["Back"] = str(item.get("back", ""))
+            topic = str(item.get("topic", "")).strip()
+            tags = [FIRST_PRINCIPLES_TAG, f"{FIRST_PRINCIPLES_UID_TAG_PREFIX}{uid}"]
+            if topic:
+                tags.append(f"{TOPIC_TAG_PREFIX}{topic}")
+            if concept := str(item.get("concept", "")).strip():
+                tags.append(f"{CONCEPT_TAG_PREFIX}{concept}")
+            note.tags = tags
+            self.col.add_note(note, flashcards_deck)
+            existing.add(uid)
+            summary.imported += 1
+            if topic:
+                summary.by_topic[topic] = summary.by_topic.get(topic, 0) + 1
+            new_card_ids.extend(c.id for c in note.cards())
+
+        if suspend and new_card_ids:
+            # Suspend so they are inert until a missed question activates them.
+            self.col.sched.suspend_cards(new_card_ids)
+            summary.suspended = len(new_card_ids)
+        return summary
+
+    def has_first_principles(self) -> bool:
+        """True if any first-principles memory cards have been imported."""
+        return bool(self.col.find_notes(f"tag:{FIRST_PRINCIPLES_TAG}"))
+
+    def reset_profile(self) -> ResetProfileSummary:
+        """Reset the learner's Speedrun *progress*, keeping all imported content.
+
+        Restores the pristine post-import state so activation and the Memory
+        model start fresh, WITHOUT deleting the question bank or the memory
+        cards. It:
+
+        * clears any paused guided-session state, so a stale session does not
+          resume;
+        * forgets every first-principles memory card (``schedule_cards_as_new``),
+          which clears their FSRS ``memory_state`` so ``graded_count`` returns to
+          0 and they read as ungraded again;
+        * re-suspends those cards, returning them to the inert state they start
+          in (activation begins from scratch).
+
+        Idempotent and safe on a collection with no Speedrun data.
+        """
+        summary = ResetProfileSummary()
+
+        # 1. Drop any paused session so Start does not resume old progress.
+        if self.col.get_config(SESSION_STATE_CONFIG_KEY, None) is not None:
+            self.col.remove_config(SESSION_STATE_CONFIG_KEY)
+            summary.session_cleared = True
+
+        # 2. Gather the memory cards and how much progress they carry (measured
+        #    before mutating, so the reported counts are meaningful).
+        all_ids = list(self.col.find_cards(f"tag:{FIRST_PRINCIPLES_TAG}"))
+        if not all_ids:
+            return summary
+        summary.cards_resuspended = len(
+            self.col.find_cards(f"tag:{FIRST_PRINCIPLES_TAG} -is:suspended")
+        )
+        summary.cards_forgotten = len(
+            self.col.find_cards(f"tag:{FIRST_PRINCIPLES_TAG} -is:new")
+        )
+
+        # 3. Forget first (clears memory_state and unsuspends into the new
+        #    queue), then re-suspend so they end inert with no FSRS history.
+        self.col.sched.schedule_cards_as_new(all_ids)
+        self.col.sched.suspend_cards(all_ids)
+        return summary
+
+    def _existing_first_principles_uids(self) -> set[str]:
+        """Stable ids of already-imported first-principles cards (idempotency)."""
+        prefix = FIRST_PRINCIPLES_UID_TAG_PREFIX
+        return {
+            tag[len(prefix) :] for tag in self.col.tags.all() if tag.startswith(prefix)
+        }
 
     def _existing_bank_uids(self) -> set[str]:
         """Stable ids of already-imported bank notes (for idempotent import)."""
@@ -478,117 +671,6 @@ class Speedrun:
         self.col.set_config(BLUEPRINT_CONFIG_KEY, chosen)
         return chosen
 
-    def _seed_demo_data(
-        self,
-        notetype_id: NotetypeId,
-        questions_deck: DeckId,
-        flashcards_deck: DeckId,
-        blueprint: dict[str, Any],
-        summary: SetupSummary,
-    ) -> None:
-        """Create the synthetic demo dataset (idempotent via ``DEMO_TAG``).
-
-        Per topic this creates: 2 served questions, 3 *suspended* linked
-        flashcards (the gating targets), and 5 *already-studied* flashcards
-        carrying a synthetic FSRS memory state so the Memory dashboard renders
-        real per-topic mastery. Everything is obviously synthetic placeholder
-        content (D-10 / D-16) and must never be shipped as real material.
-        """
-        col = self.col
-        if col.find_notes(f"tag:{DEMO_TAG}"):
-            # Already seeded; report what exists so the UI stays informative.
-            summary.demo_loaded = True
-            summary.demo_already_present = True
-            summary.questions_created = len(
-                col.find_notes(f"note:{QUESTION_NOTETYPE_NAME} tag:{DEMO_TAG}")
-            )
-            return
-
-        from anki.cards import FSRSMemoryState
-        from anki.consts import CARD_TYPE_REV, QUEUE_TYPE_REV
-
-        question_nt = col.models.get(notetype_id)
-        basic_nt = col.models.by_name("Basic")
-        assert question_nt is not None and basic_nt is not None
-
-        topics = [t["name"] for t in blueprint.get("topics", [])]
-        now = int(time.time())
-        today = col.sched.today
-        letters = ["A", "B", "C", "D"]
-        # Fraction of one stability period that has elapsed since "review",
-        # cycled across topics to produce a visible mastery spread.
-        elapsed_ratios = [0.2, 0.4, 0.7, 1.0, 1.6, 2.5, 4.0]
-        stability_days = 80.0
-
-        suspend_card_ids: list[Any] = []
-
-        for topic_index, topic in enumerate(topics):
-            topic_tag = f"{TOPIC_TAG_PREFIX}{topic}"
-            label = topic.replace("-", " ")
-
-            for q in range(2):
-                note = col.new_note(question_nt)
-                correct = letters[(topic_index + q) % 4]
-                note["stem"] = (
-                    f"Synthetic demo: placeholder MCAT-style question {q + 1} on "
-                    f"{label}. (Not real content.) Which option is designated "
-                    "correct?"
-                )
-                note["options"] = "\n".join(
-                    f"Synthetic option {opt} for {label}"
-                    for opt in ("alpha", "beta", "gamma", "delta")
-                )
-                note["correct"] = correct
-                note["explanation"] = (
-                    f"Synthetic explanation: option {correct} is the designated "
-                    f"answer for this placeholder {label} item."
-                )
-                note["source"] = "Synthetic seed (not real MCAT content)"
-                note["difficulty_b"] = f"{-1.0 + 0.5 * q + 0.2 * topic_index:.2f}"
-                note["discrimination_a"] = f"{0.8 + 0.1 * topic_index:.2f}"
-                note.tags = [topic_tag, POOL_SERVED_TAG, DEMO_TAG]
-                col.add_note(note, questions_deck)
-                summary.questions_created += 1
-
-            for f in range(3):
-                note = col.new_note(basic_nt)
-                note["Front"] = f"Synthetic flashcard {f + 1} ({label}) - front"
-                note["Back"] = (
-                    f"Synthetic flashcard {f + 1} ({label}) - back (placeholder)"
-                )
-                note.tags = [topic_tag, DEMO_TAG]
-                col.add_note(note, flashcards_deck)
-                suspend_card_ids.extend(c.id for c in note.cards())
-                summary.suspended_flashcards_created += 1
-
-            elapsed = int(
-                elapsed_ratios[topic_index % len(elapsed_ratios)]
-                * stability_days
-                * 86400
-            )
-            for s in range(5):
-                note = col.new_note(basic_nt)
-                note["Front"] = f"Synthetic studied card {s + 1} ({label}) - front"
-                note["Back"] = f"Synthetic studied card {s + 1} ({label}) - back"
-                note.tags = [topic_tag, DEMO_TAG]
-                col.add_note(note, flashcards_deck)
-                for card in note.cards():
-                    card.memory_state = FSRSMemoryState(
-                        stability=stability_days,
-                        difficulty=5.0 + 0.3 * topic_index,
-                    )
-                    card.last_review_time = now - elapsed
-                    card.type = CARD_TYPE_REV
-                    card.queue = QUEUE_TYPE_REV
-                    card.reps = 3
-                    card.due = today + 30
-                    col.update_card(card)
-                summary.studied_flashcards_created += 1
-
-        if suspend_card_ids:
-            col.sched.suspend_cards(suspend_card_ids)
-        summary.demo_loaded = True
-
     # Question-first study loop support (M2 2b surface, minimal M1 slice)
     ##########################################################################
 
@@ -606,6 +688,7 @@ class Speedrun:
         *,
         topics: set[str] | None = None,
         exclude: set[int] | None = None,
+        unseen_first: bool = False,
     ) -> list[NoteId]:
         """Served question note ids interleaved across topics (no topic blocking).
 
@@ -613,19 +696,60 @@ class Speedrun:
         recap phase to target only the just-studied topics); ``exclude`` drops
         specific note ids (used to keep the recap set disjoint from Phase 1).
 
-        Note: this loads each served note to read its ``topic::`` tag. The served
-        pool is small (tens of items) so this is cheap; revisit if it grows.
+        ``unseen_first`` orders never-practised questions (their card has zero
+        reps) ahead of already-practised ones so a capped batch (e.g. a guided
+        session's Practice phase) never re-serves the same problems while fresh
+        ones remain. Once the whole served pool has been practised, previously
+        seen questions come back rotated oldest-review-first, so repeats are the
+        least recently seen rather than always the same leading batch.
+
+        Note: this loads each served note to read its ``topic::`` tag (and, when
+        ``unseen_first`` is set, its card's review state). The served pool is
+        small (tens of items) so this is cheap; revisit if it grows.
         """
         exclude = exclude or set()
-        groups: dict[str, list[NoteId]] = {}
-        for nid in self.served_question_note_ids():
+
+        def in_scope(nid: NoteId) -> str | None:
+            """Return the bare topic if ``nid`` is in scope, else ``None``."""
             if nid in exclude:
-                continue
+                return None
             topic = topic_of_note(self.col.get_note(nid)) or ""
             if topics is not None and topic not in topics:
+                return None
+            return topic
+
+        if not unseen_first:
+            groups: dict[str, list[NoteId]] = {}
+            for nid in self.served_question_note_ids():
+                topic = in_scope(nid)
+                if topic is None:
+                    continue
+                groups.setdefault(topic, []).append(nid)
+            return _round_robin(list(groups.values()))
+
+        # Partition into never-practised vs. practised. Practised questions are
+        # sorted oldest-review-first so, once the pool is exhausted, repeats
+        # rotate rather than always replaying the same leading batch.
+        unseen_groups: dict[str, list[NoteId]] = {}
+        seen: list[tuple[int, str, NoteId]] = []
+        for nid in self.served_question_note_ids():
+            topic = in_scope(nid)
+            if topic is None:
                 continue
-            groups.setdefault(topic, []).append(nid)
-        return _round_robin(list(groups.values()))
+            cards = self.col.get_note(nid).cards()
+            card = cards[0] if cards else None
+            if card is None or card.reps == 0:
+                unseen_groups.setdefault(topic, []).append(nid)
+            else:
+                seen.append((card.last_review_time or 0, topic, nid))
+
+        result = _round_robin(list(unseen_groups.values()))
+        seen.sort(key=lambda item: item[0])
+        seen_groups: dict[str, list[NoteId]] = {}
+        for _last_review, topic, nid in seen:
+            seen_groups.setdefault(topic, []).append(nid)
+        result.extend(_round_robin(list(seen_groups.values())))
+        return result
 
     def session_caps(self) -> SessionCaps:
         """Per-phase caps for a guided session, from config (with defaults)."""
