@@ -69,8 +69,15 @@ class Scheduler(SchedulerBaseWithLegacy):
         card: Card,
         states: SchedulingStates,
         rating: CardAnswer.Rating.V,
+        from_queue: bool = True,
     ) -> CardAnswer:
-        "Build input for answer_card()."
+        """Build input for answer_card().
+
+        ``from_queue`` should stay True for the normal reviewer (the card is
+        popped from the top of the study queue). Pass False to grade a specific
+        card out of band — the answer still lands in the revlog and updates
+        scheduling, but the card is not required to be at (and is not removed
+        from) the head of any cached review queue."""
         if rating == CardAnswer.AGAIN:
             new_state = states.again
         elif rating == CardAnswer.HARD:
@@ -89,6 +96,7 @@ class Scheduler(SchedulerBaseWithLegacy):
             rating=rating,
             answered_at_millis=int_time(1000),
             milliseconds_taken=card.time_taken(capped=False),
+            from_queue=from_queue,
         )
 
     def answer_card(self, input: CardAnswer) -> OpChanges:
@@ -149,7 +157,9 @@ class Scheduler(SchedulerBaseWithLegacy):
     # Answering a card (legacy API)
     ##########################################################################
 
-    def answerCard(self, card: Card, ease: Literal[1, 2, 3, 4]) -> OpChanges:
+    def answerCard(
+        self, card: Card, ease: Literal[1, 2, 3, 4], from_queue: bool = True
+    ) -> OpChanges:
         if ease == BUTTON_ONE:
             rating = CardAnswer.AGAIN
         elif ease == BUTTON_TWO:
@@ -163,7 +173,9 @@ class Scheduler(SchedulerBaseWithLegacy):
 
         states = self.col._backend.get_scheduling_states(card.id)
         changes = self.answer_card(
-            self.build_answer(card=card, states=states, rating=rating)
+            self.build_answer(
+                card=card, states=states, rating=rating, from_queue=from_queue
+            )
         )
 
         # tests assume card will be mutated, so we need to reload it

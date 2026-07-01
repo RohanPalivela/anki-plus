@@ -24,6 +24,7 @@ use crate::search::JoinSearches;
 use crate::search::Negated;
 use crate::search::SearchNode;
 use crate::search::StateKind;
+use crate::speedrun::QUESTION_NOTETYPE_NAME;
 use crate::speedrun::TOPIC_TAG_PREFIX;
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -72,12 +73,16 @@ impl Collection {
     /// collection-wide aggregates (1b). Read-only; never mutates.
     pub(crate) fn compute_topic_mastery(&mut self) -> Result<MasteryData> {
         // Suspended cards are excluded here (and never gathered into queues), so
-        // "activated" falls out of the suspension state.
+        // "activated" falls out of the suspension state. Practice-question cards
+        // are excluded too: they carry topic:: tags and only grade, so counting
+        // them would let raw question review skew the memory/weakness signal —
+        // the model measures retention of the linked memory cards only.
         let search = SearchNode::Tag {
             tag: format!("{TOPIC_TAG_PREFIX}*"),
             mode: FieldSearchMode::Normal,
         }
-        .and(StateKind::Suspended.negated());
+        .and(StateKind::Suspended.negated())
+        .and(SearchNode::Notetype(QUESTION_NOTETYPE_NAME.into()).negated());
         let cards = self.all_cards_for_search(search)?;
         if cards.is_empty() {
             return Ok(MasteryData::default());
@@ -173,4 +178,73 @@ pub(crate) fn topics_from_tag_string(tags: &str) -> Vec<String> {
         .filter(|s| !s.is_empty())
         .map(str::to_string)
         .collect()
+}
+
+#[cfg(test)]
+mod test {
+    use crate::card::CardQueue;
+    use crate::card::CardType;
+    use crate::card::FsrsMemoryState;
+    use crate::notetype::Notetype;
+    use crate::prelude::*;
+    use crate::speedrun::test_helpers::*;
+    use crate::speedrun::QUESTION_NOTETYPE_NAME;
+
+    /// Give a note's card real, non-suspended FSRS memory state so it would be
+    /// counted by the mastery pass unless deliberately excluded.
+    fn grade_card(col: &mut Collection, note: &Note) {
+        let cid = col.storage.card_ids_of_notes(&[note.id]).unwrap()[0];
+        let mut card = col.storage.get_card(cid).unwrap().unwrap();
+        card.ctype = CardType::Review;
+        card.queue = CardQueue::Review;
+        card.memory_state = Some(FsrsMemoryState {
+            stability: 40.0,
+            difficulty: 5.0,
+        });
+        card.last_review_time = Some(TimestampSecs(1_000));
+        col.update_cards_maybe_undoable(vec![card], false).unwrap();
+    }
+
+    /// Add a graded note of the `SpeedrunQuestion` notetype (cloned from Basic),
+    /// carrying the given tags.
+    fn add_question_note(col: &mut Collection, tags: &[&str]) -> Note {
+        let ntid = match col.get_notetype_by_name(QUESTION_NOTETYPE_NAME).unwrap() {
+            Some(nt) => nt.id,
+            None => {
+                let basic = col.get_notetype_by_name("Basic").unwrap().unwrap();
+                let mut nt: Notetype = (*basic).clone();
+                nt.id = NotetypeId(0);
+                nt.name = QUESTION_NOTETYPE_NAME.to_string();
+                col.add_notetype(&mut nt, true).unwrap();
+                nt.id
+            }
+        };
+        let nt = col.get_notetype(ntid).unwrap().unwrap();
+        let mut note = nt.new_note();
+        note.set_field(0, "content").unwrap();
+        note.tags = tags.iter().map(|t| t.to_string()).collect();
+        col.add_note(&mut note, DeckId(1)).unwrap();
+        note
+    }
+
+    /// A graded practice-question card must not contribute to the mastery pass,
+    /// even though it carries a `topic::` tag and is not suspended — only linked
+    /// memory cards count.
+    #[test]
+    fn question_cards_are_excluded_from_mastery() {
+        let mut col = Collection::new();
+
+        let memory_card = add_note_with_tags(&mut col, &["topic::mem"]);
+        grade_card(&mut col, &memory_card);
+        let question = add_question_note(&mut col, &["topic::qonly"]);
+        grade_card(&mut col, &question);
+
+        let data = col.compute_topic_mastery().unwrap();
+        assert_eq!(data.graded_count, 1, "only the memory card should count");
+        assert!(data.by_topic.contains_key("mem"));
+        assert!(
+            !data.by_topic.contains_key("qonly"),
+            "question-only topic must not appear in mastery"
+        );
+    }
 }

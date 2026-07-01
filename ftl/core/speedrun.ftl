@@ -18,16 +18,13 @@ speedrun-import-bank-action = Import question bank…
 
 ## Setup.
 
-speedrun-setup-load-demo-prompt =
-    Load synthetic demo data (placeholder practice questions + linked cards)?
 speedrun-setup-complete = Speedrun (MCAT) is ready.
 speedrun-setup-summary =
     Provisioned the { $notetype } notetype, the { $deck } deck, and a
     { $topicCount }-topic MCAT blueprint.
-speedrun-setup-demo-summary =
-    Loaded synthetic demo data: { $questionCount } practice questions and
-    { $cardCount } linked flashcards.
-speedrun-setup-demo-skipped = Demo data was already present, so it was left unchanged.
+speedrun-setup-demo-removed =
+    Removed { $count } leftover synthetic demo note(s) — only imported questions
+    are used now.
 speedrun-setup-no-collection = Please open a collection first.
 
 ## Question bank import (real, legally reusable MCAT-relevant questions).
@@ -40,20 +37,25 @@ speedrun-import-bank-synced =
 speedrun-import-bank-breakdown = Sources: { $sources }. Topics: { $topics }.
 speedrun-import-bank-empty =
     No question bank file was found to import.
-speedrun-reset-action = Reset demo data…
-speedrun-reset-confirm =
-    Delete and re-create the synthetic demo data? This re-suspends the demo
-    flashcards so gated activation can be shown from scratch. Your non-demo
-    cards are not affected.
-speedrun-reset-done =
-    Demo reset — the gating flashcards are suspended again. Start a session and
-    miss a question to watch them activate.
+# Result of importing the linked first-principles memory cards alongside the bank.
+speedrun-import-first-principles =
+    Added { $importedCount } first-principles memory card(s) ({ $skippedCount }
+    already present). They stay suspended and unlock when you miss a related
+    question.
+
+## Question-bank gate (practice requires the imported bank).
+
+# Shown when the student tries to study/start a session before importing.
+speedrun-bank-required-title = Import the question bank first
+speedrun-bank-required-body =
+    Speedrun practice uses the real imported MCAT question bank. Import it once
+    now? It is stored as native notes and syncs to your other devices.
 
 ## Question-first study loop.
 
 speedrun-study-title = Speedrun — Question-first study
 speedrun-study-no-questions =
-    No served questions found. Run “Set up Speedrun (MCAT)” first.
+    No served questions found. Run “Import question bank” first.
 speedrun-study-progress = Question { $currentCount } of { $totalCount }
 speedrun-study-topic = Topic: { $topic }
 speedrun-study-submit = Submit answer
@@ -67,6 +69,9 @@ speedrun-study-activated = Activated { $count } linked card(s).
 speedrun-study-none-activated = No cards activated — this reason isn’t a memory gap.
 speedrun-study-already-active =
     No new cards — this topic’s linked cards are already active.
+speedrun-study-no-linked-cards =
+    No memory cards are linked to this topic yet — add flashcards with a
+    matching topic:: tag to unlock gated review.
 speedrun-study-tally =
     Answered { $answeredCount } · Correct { $correctCount } · Cards activated { $activatedCount }
 speedrun-study-run-sweep = Run coverage sweep
@@ -104,6 +109,20 @@ speedrun-dashboard-topic-cards = { $count } card(s)
 speedrun-dashboard-empty =
     Nothing to show yet. Set up Speedrun and study some questions first.
 speedrun-dashboard-refresh = Refresh
+# Destructive action: wipe the learner's progress but keep imported content.
+speedrun-reset-profile-action = Reset profile
+speedrun-reset-profile-confirm =
+    Reset your Speedrun progress? This re-suspends every activated memory card
+    and clears their review history, so Memory starts from scratch. Your imported
+    question bank and memory cards are kept. This cannot be undone.
+speedrun-reset-profile-done =
+    Profile reset — { $resuspendedCount } card(s) re-suspended, { $forgottenCount }
+    card(s) cleared. Imported questions and cards were kept.
+# Shown when opening the dashboard while FSRS scheduling is disabled.
+speedrun-dashboard-fsrs-off =
+    FSRS is turned off, so the Memory model has no data to score. Enable FSRS in
+    Deck Options, then review activated memory cards — Memory and coverage build
+    from FSRS retention, not from answering questions.
 
 ## Tier 2 — MCAT home screen (the default landing).
 
@@ -125,8 +144,10 @@ speedrun-session-recap-title = Recap — transfer check
 speedrun-session-continue = Continue
 speedrun-session-stop = Stop session
 speedrun-session-stopped = Speedrun session stopped.
+speedrun-session-paused =
+    Progress saved. Press Start to pick up where you left off.
 speedrun-session-nothing =
-    Nothing to study yet — run Tools → Speedrun (MCAT) → Set up first.
+    Nothing to study yet — run Tools → Speedrun (MCAT) → Import question bank first.
 speedrun-session-complete = Session complete.
 speedrun-session-complete-detail =
     You answered { $answeredCount } question(s) ({ $correctCount } correct) and

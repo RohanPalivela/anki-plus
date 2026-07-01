@@ -188,6 +188,7 @@ impl Collection {
                     rating,
                     milliseconds_taken: 0,
                     answered_at_millis: TimestampMillis::now().into(),
+                    from_queue: None,
                 }
                 .into();
                 // Process the card without updating queues yet

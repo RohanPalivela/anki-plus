@@ -33,6 +33,13 @@ pub(crate) mod value_order;
 /// link.
 pub(crate) const TOPIC_TAG_PREFIX: &str = "topic::";
 
+/// Name of the practice-question notetype (mirrors
+/// `anki.speedrun.QUESTION_NOTETYPE_NAME`; part of the frozen data-model
+/// contract). Questions carry `topic::` tags too, but they only *grade*: the
+/// Memory model and value ordering measure retention of the linked memory
+/// cards, so question cards are excluded from the mastery pass.
+pub(crate) const QUESTION_NOTETYPE_NAME: &str = "SpeedrunQuestion";
+
 /// Optional tag prefix on a question note pointing at a specific flashcard note
 /// id it can activate, for when shared-topic linkage is too coarse (D-2a).
 pub(crate) const GATES_TAG_PREFIX: &str = "gates::";

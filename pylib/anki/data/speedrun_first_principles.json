@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "note": "Original, hand-authored MCAT first-principles memory cards for the Speedrun fork. These are DELIBERATELY not derived from any question in speedrun_question_bank.json: each card teaches the underlying principle a family of questions tests, never restates a specific item, and is not part of the served/heldout question set. Cards are linked to practice questions purely by their topic:: tag, imported as suspended Basic notes into Speedrun::Cards, and activated only when a related question is missed for a memory reason.",
+  "license": "AGPL-3.0",
+  "cards": [
+    {
+      "uid": "fp-phys-work-1",
+      "topic": "physics",
+      "concept": "work-energy",
+      "front": "First principle: how do you compute the work done by a constant force, and what does the work–energy theorem say?",
+      "back": "Work W = F d cos(theta) — only the force component along the displacement does work, so forces perpendicular to motion (normal, centripetal) do zero work. Work–energy theorem: net work equals the change in kinetic energy, W_net = (1/2)m(v_f^2 - v_i^2)."
+    },
+    {
+      "uid": "fp-phys-ramp-1",
+      "topic": "physics",
+      "concept": "work-energy",
+      "front": "First principle: why does raising a mass a height h up a frictionless ramp take the same work regardless of the ramp's angle?",
+      "back": "Work against gravity depends only on the vertical rise: W = mgh. A shallower ramp needs a smaller force (F = mg sin(theta) along the incline) but over a longer distance, and the product is unchanged. A ramp is a force–distance trade, not an energy discount (gravitational PE = mgh)."
+    },
+    {
+      "uid": "fp-phys-coulomb-1",
+      "topic": "physics",
+      "concept": "electrostatics",
+      "front": "First principle: how does the electrostatic force between two point charges scale with charge and separation?",
+      "back": "Coulomb's law: F = k q1 q2 / r^2. Force is proportional to the product of the charges and to 1/r^2, so doubling the separation cuts the force to one quarter. Like charges repel, opposite charges attract. The field of a point charge follows the same inverse-square form, E = k q / r^2."
+    },
+    {
+      "uid": "fp-phys-circuits-1",
+      "topic": "physics",
+      "concept": "circuits",
+      "front": "First principle: how are voltage, current, resistance, and power related in a resistor, and how do resistors combine?",
+      "back": "Ohm's law: V = I R. Power dissipated: P = I V = I^2 R = V^2 / R. In series, resistances add and the current is shared; in parallel, 1/R_eq = sum(1/R_i) and the voltage is shared."
+    },
+    {
+      "uid": "fp-phys-optics-1",
+      "topic": "physics",
+      "concept": "optics",
+      "front": "First principle: what is the thin-lens/mirror equation, and how do you tell a real image from a virtual one?",
+      "back": "1/f = 1/d_o + 1/d_i, with magnification m = -d_i / d_o. A positive image distance means a real, inverted image (opposite side of a lens; same side of a mirror) that can be projected; a negative image distance means a virtual, upright image. Converging optics have positive focal length."
+    },
+    {
+      "uid": "fp-gchem-faraday-1",
+      "topic": "general-chemistry",
+      "concept": "electrochemistry",
+      "front": "First principle: relating charge passed to moles of metal deposited/oxidized — how many electrons per ion, and how do you get mass?",
+      "back": "The half-reaction sets the electron count: M(n+) + n e- -> M needs n electrons per metal atom. Moles of electrons = charge / Faraday's constant (F approx 96,485 C/mol). Moles of metal = (moles of electrons) / n, then mass = moles x molar mass. The classic trap is forgetting to divide by n from the balanced half-reaction."
+    },
+    {
+      "uid": "fp-gchem-cells-1",
+      "topic": "general-chemistry",
+      "concept": "electrochemistry",
+      "front": "First principle: where do oxidation and reduction happen, and which electrochemical cell is spontaneous?",
+      "back": "Oxidation always occurs at the anode and reduction at the cathode (mnemonic: AN-OX, RED-CAT). Galvanic (voltaic) cells run spontaneously with a positive cell potential and negative free-energy change; electrolytic cells consume external electrical energy to drive a nonspontaneous reaction."
+    },
+    {
+      "uid": "fp-gchem-gas-1",
+      "topic": "general-chemistry",
+      "concept": "gas-phase",
+      "front": "First principle: what does the ideal gas law tie together, and how do partial pressures work?",
+      "back": "PV = nRT. At fixed temperature and amount, pressure and volume are inversely related (Boyle); at fixed pressure and amount, volume is proportional to absolute temperature (Charles). For a mixture, partial pressures add to the total (Dalton), and each gas's mole fraction equals its pressure fraction."
+    },
+    {
+      "uid": "fp-gchem-stoich-1",
+      "topic": "general-chemistry",
+      "concept": "stoichiometry",
+      "front": "First principle: what is the general recipe for a stoichiometry problem, and what caps the product?",
+      "back": "Convert mass to moles (divide by molar mass), multiply by the mole ratio from the balanced equation, then convert back to the requested unit. The limiting reagent — the reactant with the fewest moles per its coefficient — determines the maximum product; the others are in excess."
+    },
+    {
+      "uid": "fp-gchem-acidbase-1",
+      "topic": "general-chemistry",
+      "concept": "acid-base-equilibria",
+      "front": "First principle: define pH and the buffer (Henderson–Hasselbalch) relationship.",
+      "back": "pH = -log[H+] and pKa = -log(Ka). For a buffer, pH = pKa + log([A-]/[HA]). When the conjugate acid and base are equal, pH = pKa; a buffer resists pH change best within about one unit of its pKa."
+    },
+    {
+      "uid": "fp-ochem-extraction-1",
+      "topic": "organic-chemistry",
+      "concept": "separations-and-purifications",
+      "front": "First principle: what governs liquid–liquid extraction, and how does acid–base extraction change solubility?",
+      "back": "Like dissolves like: nonpolar solutes partition into the organic layer, ionic or highly polar solutes into the aqueous layer. Acid–base extraction toggles this by (de)protonation — e.g., adding base converts a carboxylic acid to its ionic carboxylate, pulling it into the aqueous phase; acidifying reverses it."
+    },
+    {
+      "uid": "fp-ochem-carboxylic-1",
+      "topic": "organic-chemistry",
+      "concept": "carboxylic-acids",
+      "front": "First principle: why is a carboxylic acid far more acidic than an alcohol?",
+      "back": "Acidity is about stabilizing the conjugate base. A carboxylate spreads its negative charge by resonance over two equivalent oxygens, whereas an alkoxide cannot delocalize. Nearby electron-withdrawing groups stabilize the anion further and lower the pKa."
+    },
+    {
+      "uid": "fp-ochem-chirality-1",
+      "topic": "organic-chemistry",
+      "concept": "stereochemistry",
+      "front": "First principle: what makes a carbon a stereocenter, and how do enantiomers differ from diastereomers?",
+      "back": "A carbon bonded to four different groups is a chiral stereocenter. Enantiomers are non-superimposable mirror images: identical in ordinary physical properties, differing only in the direction they rotate plane-polarized light and in chiral environments. Diastereomers differ at some but not all stereocenters and do have different physical properties."
+    },
+    {
+      "uid": "fp-biochem-pi-1",
+      "topic": "biochemistry",
+      "concept": "amino-acids",
+      "front": "First principle: what is an amino acid's isoelectric point (pI), and how do you estimate it?",
+      "back": "The pI is the pH at which the molecule carries no net charge (zwitterion dominant). For a residue with a non-ionizable side chain, pI is roughly the average of the alpha-amino and alpha-carboxyl pKa values; with an ionizable side chain, average the two pKa values that flank the neutral form. Below the pI the molecule is net positive, above it net negative."
+    },
+    {
+      "uid": "fp-biochem-enzyme-1",
+      "topic": "biochemistry",
+      "concept": "enzyme-regulation",
+      "front": "First principle: interpret Km and Vmax, and contrast competitive with noncompetitive inhibition.",
+      "back": "Vmax is the maximal rate at saturating substrate; Km is the substrate concentration giving half of Vmax and is an inverse measure of affinity. A competitive inhibitor raises the apparent Km but leaves Vmax unchanged (it can be outcompeted by more substrate); a classic noncompetitive inhibitor lowers Vmax with Km unchanged."
+    },
+    {
+      "uid": "fp-biochem-bioenergetics-1",
+      "topic": "biochemistry",
+      "concept": "bioenergetics",
+      "front": "First principle: what determines whether a reaction is spontaneous, and how do cells drive unfavorable reactions?",
+      "back": "Free-energy change: delta_G = delta_H - T delta_S; a negative delta_G means spontaneous. The actual delta_G depends on real concentrations, not just the standard value. Cells couple an endergonic reaction to a strongly exergonic one — usually ATP hydrolysis (standard delta_G about -30 kJ/mol) — so the combined delta_G is negative."
+    },
+    {
+      "uid": "fp-biochem-glycolysis-1",
+      "topic": "biochemistry",
+      "concept": "glycolysis",
+      "front": "First principle: what is the net yield of glycolysis and its committed regulatory step?",
+      "back": "Glucose to two pyruvate nets 2 ATP (4 produced minus 2 invested) and 2 NADH, in the cytoplasm, without oxygen. The committed, rate-limiting step is phosphofructokinase-1: activated by AMP and fructose-2,6-bisphosphate, inhibited by ATP and citrate."
+    },
+    {
+      "uid": "fp-biochem-oxphos-1",
+      "topic": "biochemistry",
+      "concept": "oxidative-phosphorylation",
+      "front": "First principle: how does the electron transport chain make ATP, and what is the terminal electron acceptor?",
+      "back": "Electron carriers pump protons into the intermembrane space, building a proton-motive force; ATP synthase then lets protons flow back down that gradient to phosphorylate ADP (chemiosmosis). Oxygen is the terminal electron acceptor, reduced to water. Uncouplers dissipate the gradient, releasing energy as heat instead of ATP."
+    },
+    {
+      "uid": "fp-bio-centraldogma-1",
+      "topic": "biology",
+      "concept": "transcription-translation",
+      "front": "First principle: contrast transcription and translation by enzyme, template, product, and direction.",
+      "back": "Transcription: RNA polymerase reads the DNA template strand 3' to 5' and builds mRNA 5' to 3' (no primer required). Translation: the ribosome reads mRNA codons 5' to 3' while tRNAs add amino acids; start codon AUG (Met), stop codons UAA/UAG/UGA. The code is degenerate — several codons can specify one amino acid."
+    },
+    {
+      "uid": "fp-bio-mendel-1",
+      "topic": "biology",
+      "concept": "mendelian-genetics",
+      "front": "First principle: state segregation and independent assortment, and predict a monohybrid cross.",
+      "back": "Law of segregation: each parent contributes one of its two alleles per gene. Law of independent assortment: genes on different chromosomes are inherited independently. A monohybrid cross Aa x Aa gives a 3:1 phenotypic and 1:2:1 genotypic ratio; a test cross against a homozygous recessive reveals an unknown genotype."
+    },
+    {
+      "uid": "fp-bio-transport-1",
+      "topic": "biology",
+      "concept": "membrane-transport",
+      "front": "First principle: distinguish passive from active transport across a membrane.",
+      "back": "Passive transport (simple/facilitated diffusion, osmosis) moves a substance down its electrochemical gradient and needs no ATP. Active transport moves it against the gradient using energy: primary active transport spends ATP directly (e.g., the Na+/K+ pump), while secondary active transport rides an existing ion gradient (symport or antiport)."
+    },
+    {
+      "uid": "fp-psych-thresholds-1",
+      "topic": "psychology",
+      "concept": "sensory-processing",
+      "front": "First principle: what is sensory transduction, and how do the absolute and difference thresholds differ?",
+      "back": "Transduction is the conversion of a physical stimulus into a neural signal by receptor cells. The absolute threshold is the smallest intensity detectable half the time; the difference threshold (just-noticeable difference) follows Weber's law, where the JND is a constant fraction of the baseline intensity. Signal detection theory adds the observer's decision criterion, not just raw sensitivity."
+    },
+    {
+      "uid": "fp-psych-conditioning-1",
+      "topic": "psychology",
+      "concept": "associative-learning",
+      "front": "First principle: contrast classical and operant conditioning.",
+      "back": "Classical conditioning (Pavlov) pairs a neutral stimulus with an unconditioned stimulus until it alone elicits an involuntary conditioned response. Operant conditioning (Skinner) shapes voluntary behavior through consequences — reinforcement increases a behavior, punishment decreases it — and variable-ratio schedules produce behavior most resistant to extinction."
+    },
+    {
+      "uid": "fp-psych-memory-1",
+      "topic": "psychology",
+      "concept": "memory",
+      "front": "First principle: outline the stages and major types of memory.",
+      "back": "Memory proceeds through encoding, storage, and retrieval. Information flows from sensory memory to a limited short-term/working store (about 7 plus-or-minus 2 items, seconds without rehearsal) to long-term memory. Long-term memory splits into explicit/declarative (episodic and semantic) and implicit (procedural); deeper, meaning-based encoding improves retention."
+    },
+    {
+      "uid": "fp-soc-paradigms-1",
+      "topic": "sociology",
+      "concept": "theoretical-approaches",
+      "front": "First principle: summarize functionalism, conflict theory, and symbolic interactionism.",
+      "back": "Functionalism (macro) views society as interdependent parts that work together to maintain stability. Conflict theory (macro) sees society as competition over scarce resources, emphasizing power and inequality. Symbolic interactionism (micro) focuses on how people create shared meaning through everyday interaction and symbols."
+    },
+    {
+      "uid": "fp-soc-stratification-1",
+      "topic": "sociology",
+      "concept": "social-class",
+      "front": "First principle: define social stratification and the main types of social mobility.",
+      "back": "Stratification is the hierarchical ranking of groups by access to resources such as wealth, status, and power; socioeconomic status combines income, education, and occupation. Mobility can be intragenerational (within one lifetime) or intergenerational (across generations), and systems range from open (class-based, mobility possible) to closed (caste-based, status ascribed at birth)."
+    }
+  ]
+}

@@ -283,6 +283,12 @@ message CardAnswer {
   Rating rating = 4;
   int64 answered_at_millis = 5;
   uint32 milliseconds_taken = 6;
+  // Whether the card is being answered from the top of the study queue (the
+  // normal reviewer path). When unset it defaults to true to preserve legacy
+  // behaviour. Out-of-queue graders such as the Speedrun question dialog set
+  // this false so a specific card can be graded without requiring it to be at
+  // the head of — or disturbing — the current review queue.
+  optional bool from_queue = 7;
 }
 
 message CustomStudyRequest {

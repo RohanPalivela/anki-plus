@@ -26,7 +26,13 @@ import aqt
 import aqt.main
 from anki.cards import CardId
 from anki.notes import NoteId
-from anki.speedrun import MissReason, correct_index, option_lines, topic_of_note
+from anki.speedrun import (
+    QUESTION_NOTETYPE_NAME,
+    MissReason,
+    correct_index,
+    option_lines,
+    topic_of_note,
+)
 from aqt.qt import *
 from aqt.utils import disable_help_button, restoreGeom, saveGeom, tooltip, tr
 
@@ -61,6 +67,11 @@ class StudyPhaseResult:
     answered_count: int = 0
     correct_count: int = 0
     activated_total: int = 0
+    #: Index into the injected question list to resume at if the phase was
+    #: stopped early (the question the student was on, or the next one if the
+    #: current question was already answered). Only meaningful when
+    #: ``completed`` is False.
+    resume_index: int = 0
 
 
 class SpeedrunStudyDialog(QDialog):
@@ -82,6 +93,7 @@ class SpeedrunStudyDialog(QDialog):
         title: str | None = None,
         on_finish: Callable[[StudyPhaseResult], None] | None = None,
         allow_sweep: bool = True,
+        start_index: int = 0,
     ) -> None:
         QDialog.__init__(self, mw, Qt.WindowType.Window)
         self.mw = mw
@@ -98,7 +110,9 @@ class SpeedrunStudyDialog(QDialog):
         self._on_finish = on_finish
         # The guided session keeps full control; hide the manual sweep there.
         self._allow_sweep = allow_sweep and mode == MODE_STANDALONE
-        self.index = 0
+        # Clamp the resume point in case the injected list shrank since it was
+        # persisted.
+        self.index = max(0, min(start_index, len(self.note_ids)))
         self.answered_count = 0
         self.correct_count = 0
         self.activated_total = 0
@@ -125,6 +139,9 @@ class SpeedrunStudyDialog(QDialog):
 
         if not self.note_ids:
             self._show_empty_state()
+        elif self.index >= len(self.note_ids):
+            # Resuming past the end: this phase was already finished.
+            self._show_finished_state()
         else:
             self._load_question()
         self.show()
@@ -298,10 +315,14 @@ class SpeedrunStudyDialog(QDialog):
                     "text-align: left; padding: 8px; background: #c62828; color: white;"
                 )
 
-        # Native review write (Again=incorrect, Good=correct) -> revlog.
+        # Native review write (Again=incorrect, Good=correct) -> revlog. Graded
+        # out of queue (from_queue=False): the question card is fetched by note
+        # id, not served from the study queue, and a stale review queue (e.g. the
+        # flashcard queue left cached after Phase 2) would otherwise reject this
+        # with "not at top of queue".
         card = self.mw.col.get_card(self.current_card_id)
         card.start_timer()
-        self.mw.col.sched.answerCard(card, 3 if is_correct else 1)
+        self.mw.col.sched.answerCard(card, 3 if is_correct else 1, from_queue=False)
 
         self.answered_count += 1
         if is_correct:
@@ -341,15 +362,33 @@ class SpeedrunStudyDialog(QDialog):
         if count:
             self.activation_label.setText(tr.speedrun_study_activated(count=count))
         elif reason in (MissReason.KNOWLEDGE_GAP, MissReason.MISSING_CONTEXT):
-            # Qualifying reason, but this topic's linked cards are already active
-            # (e.g. an earlier miss on the same topic already unsuspended them).
-            self.activation_label.setText(tr.speedrun_study_already_active())
+            # Qualifying reason but nothing was unsuspended. Distinguish the two
+            # very different causes so the message is honest: either this topic
+            # has no linked memory cards at all, or they are already active.
+            if self._topic_has_linked_flashcards():
+                self.activation_label.setText(tr.speedrun_study_already_active())
+            else:
+                self.activation_label.setText(tr.speedrun_study_no_linked_cards())
         else:
             self.activation_label.setText(tr.speedrun_study_none_activated())
         self.activation_label.setVisible(True)
         self.miss_container.setVisible(False)
         self.next_button.setVisible(True)
         self._update_tally()
+
+    def _topic_has_linked_flashcards(self) -> bool:
+        """True if the current topic has any *memory flashcards* (non-question
+        notes sharing its ``topic::`` tag), regardless of suspension state.
+
+        Used only to phrase the "nothing activated" message correctly: the
+        practice questions themselves also carry ``topic::`` tags, so they must
+        be excluded — otherwise every topic looks like it has linked cards."""
+        if not self._current_topic:
+            return False
+        query = (
+            f"tag:topic::{self._current_topic} -note:{QUESTION_NOTETYPE_NAME}"
+        )
+        return bool(self.mw.col.find_cards(query))
 
     def _on_next(self) -> None:
         # In a session, the finished screen reuses this button as "Continue".
@@ -417,6 +456,9 @@ class SpeedrunStudyDialog(QDialog):
         self._finish_emitted = True
         if self._on_finish is None:
             return
+        # Resume on the question the student is currently viewing, unless they
+        # already answered it — in that case pick up at the next one.
+        resume_index = self.index + 1 if self._answered_current else self.index
         self._on_finish(
             StudyPhaseResult(
                 completed=self._completed,
@@ -426,6 +468,7 @@ class SpeedrunStudyDialog(QDialog):
                 answered_count=self.answered_count,
                 correct_count=self.correct_count,
                 activated_total=self.activated_total,
+                resume_index=resume_index,
             )
         )
 

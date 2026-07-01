@@ -497,6 +497,7 @@ mod tests {
                 rating: rating as i32,
                 answered_at_millis: TimestampMillis::now().0,
                 milliseconds_taken: 0,
+                from_queue: None,
             },
         )
         .unwrap();

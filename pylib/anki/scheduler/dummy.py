@@ -18,7 +18,7 @@ class DummyScheduler(SchedulerBaseWithLegacy):
     def getCard(self) -> Card | None:
         raise Exception("v1/v2 scheduler no longer supported")
 
-    def answerCard(self, card: Card, ease: int) -> None:
+    def answerCard(self, card: Card, ease: int, from_queue: bool = True) -> None:
         raise Exception("v1/v2 scheduler no longer supported")
 
     def _is_finished(self) -> bool:

@@ -217,4 +217,28 @@
             border-radius: 8px;
         }
     }
+
+    .dashboard-footer {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 24px;
+        padding-top: 14px;
+        border-top: 1px solid var(--border-subtle);
+
+        // Secondary/destructive: subdued red outline, filling in on hover so it
+        // never competes with the primary actions.
+        .reset {
+            padding: 6px 14px;
+            border: 1px solid hsl(0, 60%, 45%);
+            border-radius: var(--border-radius, 6px);
+            background: transparent;
+            color: hsl(0, 65%, 55%);
+            cursor: pointer;
+
+            &:hover {
+                background: hsl(0, 65%, 45%);
+                color: white;
+            }
+        }
+    }
 }

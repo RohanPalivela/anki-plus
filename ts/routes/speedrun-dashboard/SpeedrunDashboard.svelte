@@ -9,6 +9,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         TopicMastery,
     } from "@generated/anki/speedrun_pb";
     import * as tr from "@generated/ftl";
+    import { bridgeCommand } from "@tslib/bridgecommand";
 
     import "./speedrun-dashboard.scss";
 
@@ -27,11 +28,20 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         score = await getMemoryScore({});
     }
 
+    function resetProfile(): void {
+        // The Qt host confirms (destructive) and performs the reset, then
+        // reloads this page with a fresh snapshot.
+        bridgeCommand("reset-profile");
+    }
+
     $: sortedTopics = [...score.topics].sort(
         (a: TopicMastery, b: TopicMastery) =>
             Number(b.known) - Number(a.known) || b.mastery - a.mastery,
     );
-    $: hasData = score.gradedCount > 0;
+    // While abstaining the derived percentages are unreliable; show placeholders
+    // rather than a misleading score. The graded count and per-topic bars (real
+    // data) stay visible.
+    $: showScore = !score.abstained;
 </script>
 
 <div class="speedrun-dashboard">
@@ -61,7 +71,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             {/if}
 
             <div class="headline" class:muted={score.abstained}>
-                <div class="big-number">{hasData ? pct(score.overall) : "—"}</div>
+                <div class="big-number">{showScore ? pct(score.overall) : "—"}</div>
                 <div class="big-label">{tr.speedrunDashboardOverall()}</div>
             </div>
 
@@ -69,14 +79,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 <div class="stat">
                     <span class="stat-label">{tr.speedrunDashboardRange()}</span>
                     <span class="stat-value">
-                        {hasData
+                        {showScore
                             ? `${pct(score.rangeLow)} – ${pct(score.rangeHigh)}`
                             : "—"}
                     </span>
                 </div>
                 <div class="stat">
                     <span class="stat-label">{tr.speedrunDashboardCoverage()}</span>
-                    <span class="stat-value">{pct(score.coverage)}</span>
+                    <span class="stat-value">{showScore ? pct(score.coverage) : "—"}</span>
                 </div>
                 <div class="stat">
                     <span class="stat-label">{tr.speedrunDashboardGraded()}</span>
@@ -143,4 +153,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             <div class="coming-soon">{tr.speedrunDashboardComingM3()}</div>
         </section>
     </div>
+
+    <footer class="dashboard-footer">
+        <button
+            class="reset"
+            on:click={resetProfile}
+            title={tr.speedrunResetProfileConfirm()}
+        >
+            {tr.speedrunResetProfileAction()}
+        </button>
+    </footer>
 </div>

@@ -15,7 +15,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         return `${Math.round(value * 100)}%`;
     }
 
-    $: hasData = score.gradedCount > 0;
+    // While abstaining (too little data / coverage), the derived percentages are
+    // unreliable, so show placeholders instead of misleading numbers. The raw
+    // graded-card count stays, as honest progress toward a real score.
+    $: showScore = !score.abstained;
 
     function start(): void {
         bridgeCommand("start");
@@ -47,19 +50,21 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             {/if}
         </div>
         <div class="score-line">
-            <span class="big-number">{hasData ? pct(score.overall) : "—"}</span>
+            <span class="big-number">{showScore ? pct(score.overall) : "—"}</span>
             <span class="big-label">{tr.speedrunDashboardOverall()}</span>
         </div>
         <div class="mini-stats">
             <div class="mini-stat">
                 <span class="mini-label">{tr.speedrunDashboardRange()}</span>
                 <span class="mini-value">
-                    {hasData ? `${pct(score.rangeLow)} – ${pct(score.rangeHigh)}` : "—"}
+                    {showScore
+                        ? `${pct(score.rangeLow)} – ${pct(score.rangeHigh)}`
+                        : "—"}
                 </span>
             </div>
             <div class="mini-stat">
                 <span class="mini-label">{tr.speedrunDashboardCoverage()}</span>
-                <span class="mini-value">{pct(score.coverage)}</span>
+                <span class="mini-value">{showScore ? pct(score.coverage) : "—"}</span>
             </div>
             <div class="mini-stat">
                 <span class="mini-label">{tr.speedrunDashboardGraded()}</span>
