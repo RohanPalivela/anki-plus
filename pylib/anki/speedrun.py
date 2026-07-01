@@ -277,6 +277,18 @@ class Speedrun:
             )
         return summary
 
+    def reset_demo(self) -> SetupSummary:
+        """Delete the synthetic demo data and recreate it fresh, so question-
+        gated activation can be demonstrated from scratch (the gating flashcards
+        are suspended again). Only demo objects (tagged ``DEMO_TAG``) are
+        removed; the notetype, decks, blueprint, and any non-demo cards are
+        preserved.
+        """
+        demo_notes = list(self.col.find_notes(f"tag:{DEMO_TAG}"))
+        if demo_notes:
+            self.col.remove_notes(demo_notes)
+        return self.setup_mcat(load_demo_data=True)
+
     def ensure_question_notetype(self) -> NotetypeId:
         """Return the ``SpeedrunQuestion`` notetype id, creating it if absent."""
         models = self.col.models

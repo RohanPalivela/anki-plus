@@ -28,6 +28,14 @@ speedrun-setup-demo-summary =
     { $cardCount } linked flashcards.
 speedrun-setup-demo-skipped = Demo data was already present, so it was left unchanged.
 speedrun-setup-no-collection = Please open a collection first.
+speedrun-reset-action = Reset demo data…
+speedrun-reset-confirm =
+    Delete and re-create the synthetic demo data? This re-suspends the demo
+    flashcards so gated activation can be shown from scratch. Your non-demo
+    cards are not affected.
+speedrun-reset-done =
+    Demo reset — the gating flashcards are suspended again. Start a session and
+    miss a question to watch them activate.
 
 ## Question-first study loop.
 

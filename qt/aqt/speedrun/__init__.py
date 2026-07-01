@@ -45,6 +45,10 @@ def setup_speedrun_menu(mw: aqt.main.AnkiQt) -> None:
     dashboard_action = menu.addAction(tr.speedrun_dashboard_action())
     qconnect(dashboard_action.triggered, lambda: open_dashboard(mw))
 
+    menu.addSeparator()
+    reset_action = menu.addAction(tr.speedrun_reset_action())
+    qconnect(reset_action.triggered, lambda: run_reset(mw))
+
     mw.form.menuTools.addSeparator()
     mw.form.menuTools.addMenu(menu)
     # Keep a reference so the menu isn't garbage-collected.
@@ -121,6 +125,27 @@ def run_setup(mw: aqt.main.AnkiQt) -> None:
             )
         )
     showInfo("\n".join(lines), parent=mw, title=tr.speedrun_menu())
+
+
+def run_reset(mw: aqt.main.AnkiQt) -> None:
+    """Delete and re-create the synthetic demo data (re-suspends gating cards)."""
+    if not mw.col:
+        showInfo(tr.speedrun_setup_no_collection(), parent=mw)
+        return
+    if not askUser(
+        tr.speedrun_reset_confirm(),
+        parent=mw,
+        title=tr.speedrun_menu(),
+        defaultno=True,
+    ):
+        return
+    mw.progress.start(label=tr.speedrun_reset_action(), immediate=True)
+    try:
+        mw.col.speedrun.reset_demo()
+    finally:
+        mw.progress.finish()
+    mw.reset()
+    showInfo(tr.speedrun_reset_done(), parent=mw, title=tr.speedrun_menu())
 
 
 def open_study(mw: aqt.main.AnkiQt) -> None:
