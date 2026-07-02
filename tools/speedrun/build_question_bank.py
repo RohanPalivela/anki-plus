@@ -124,6 +124,39 @@ OPENMCAT_SECTION_FALLBACK = {
     "ps": "psychology",
 }
 
+# Explicit map from OpenMCAT tested-topic id -> the fine-grained `concept` used
+# by the first-principles memory cards (concept:: in speedrun_first_principles
+# .json). This is the strongest deterministic linkage signal: OpenMCAT's tested
+# topics are essentially the same concepts, so persisting it lets the import-time
+# linkage pass make an exact question->first-principles match. Ids without a
+# matching first-principles concept are omitted (the item ships with no concept
+# and linkage falls back to keyword/topic signals).
+OPENMCAT_CONCEPT_MAP: dict[str, str] = {
+    "cp_work": "work-energy",
+    "cp_electrostatics": "electrostatics",
+    "cp_circuit_elements": "circuits",
+    "cp_geometrical_optics": "optics",
+    "cp_gas_phase": "gas-phase",
+    "cp_electrochemistry": "electrochemistry",
+    "cp_stoichiometry": "stoichiometry",
+    "cp_acid_base_equilibria": "acid-base-equilibria",
+    "cp_separations_and_purifications": "separations-and-purifications",
+    "cp_carboxylic_acids": "carboxylic-acids",
+    "bb_amino_acids": "amino-acids",
+    "bb_control_of_enzyme_activity": "enzyme-regulation",
+    "bb_principles_of_bioenergetics": "bioenergetics",
+    "bb_glycolysis_gluconeogenesis_and_the_pentose_phosphate_pathway": "glycolysis",
+    "bb_oxidative_phosphorylation": "oxidative-phosphorylation",
+    "bb_translation": "transcription-translation",
+    "bb_transcription": "transcription-translation",
+    "bb_mendelian_concepts": "mendelian-genetics",
+    "ps_sensory_processing": "sensory-processing",
+    "ps_memory": "memory",
+    "ps_associative_learning": "associative-learning",
+    "ps_social_class": "social-class",
+    "ps_theoretical_approaches": "theoretical-approaches",
+}
+
 # --- MMLU ---------------------------------------------------------------------
 
 MMLU_ROWS_API = "https://datasets-server.huggingface.co/rows"
@@ -175,6 +208,9 @@ class Question:
     difficulty_b: float
     discrimination_a: float
     ai_generated: bool = False
+    # Fine-grained concept (matches a first-principles concept::) when known,
+    # feeding the import-time gates:: linkage. Empty when no mapping exists.
+    concept: str = ""
 
 
 def _fetch_json(url: str, *, max_retries: int = 8) -> Any:
@@ -254,6 +290,14 @@ def _openmcat_topic(tested_ids: list[str], section_id: str) -> str:
     return OPENMCAT_SECTION_FALLBACK.get(section_id, "biology")
 
 
+def _openmcat_concept(tested_ids: list[str]) -> str:
+    """First tested-topic id that maps to a first-principles concept, else ''."""
+    for tid in tested_ids:
+        if tid in OPENMCAT_CONCEPT_MAP:
+            return OPENMCAT_CONCEPT_MAP[tid]
+    return ""
+
+
 def _openmcat_explanation(question: dict[str, Any]) -> str:
     parts: list[str] = []
     if explanation := question.get("explanation"):
@@ -289,7 +333,8 @@ def fetch_openmcat() -> list[Question]:
                 stem = f"{_render_passage(passage)}\n\n{stem}"
 
             uid = f"openmcat-{section_id}-{question.get('id')}"
-            topic = _openmcat_topic(question.get("testedTopicIds", []), section_id)
+            tested_ids = question.get("testedTopicIds", [])
+            topic = _openmcat_topic(tested_ids, section_id)
             out.append(
                 Question(
                     uid=uid,
@@ -305,6 +350,7 @@ def fetch_openmcat() -> list[Question]:
                     difficulty_b=_difficulty_b(question.get("estimatedDifficulty")),
                     discrimination_a=1.0,
                     ai_generated=True,
+                    concept=_openmcat_concept(tested_ids),
                 )
             )
     return out
@@ -437,8 +483,18 @@ def main() -> None:
         print(f"  MMLU: {len(mmlu)} questions")
         questions += mmlu
 
-    bank = build_bank(questions)
-    print("Counts:", json.dumps(bank.counts, indent=2))
+    raw_bank = build_bank(questions)
+    print("Raw counts:", json.dumps(raw_bank.counts, indent=2))
+
+    # Curate the freshly-fetched bank with the SAME deterministic rules used to
+    # maintain the vendored file, so a network regen and an offline `curate.py
+    # --in-place` stay consistent (blueprint-shaped, length-capped, concept-
+    # mapped served pool + proportional heldout).
+    from curate import build_curated_bank  # local tool import (same dir)
+
+    bank_dict, report = build_curated_bank(asdict(raw_bank))
+    print("Curation report:", json.dumps(report, indent=2))
+    print("Curated counts:", json.dumps(bank_dict["counts"], indent=2))
 
     if args.dry_run:
         print("Dry run — not writing.")
@@ -446,11 +502,13 @@ def main() -> None:
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     # ``mtime=0`` keeps the gzip byte-for-byte reproducible across runs.
-    payload = json.dumps(asdict(bank), ensure_ascii=False).encode("utf-8")
+    payload = json.dumps(bank_dict, ensure_ascii=False).encode("utf-8")
     with gzip.GzipFile(OUTPUT_PATH, "wb", compresslevel=9, mtime=0) as fh:
         fh.write(payload)
     size_mb = OUTPUT_PATH.stat().st_size / 1_000_000
-    print(f"Wrote {OUTPUT_PATH} ({size_mb:.1f} MB, {bank.counts['total']} questions)")
+    print(
+        f"Wrote {OUTPUT_PATH} ({size_mb:.1f} MB, {bank_dict['counts']['total']} questions)"
+    )
 
 
 if __name__ == "__main__":
