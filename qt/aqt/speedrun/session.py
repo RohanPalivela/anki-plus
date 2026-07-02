@@ -60,9 +60,7 @@ _STATE_KEY = SESSION_STATE_CONFIG_KEY
 class SpeedrunSession:
     """Drives the fixed Practice → Flashcards → Recap → Home sequence."""
 
-    def __init__(
-        self, mw: aqt.main.AnkiQt, *, state: dict | None = None
-    ) -> None:
+    def __init__(self, mw: aqt.main.AnkiQt, *, state: dict | None = None) -> None:
         self.mw = mw
         self.caps = mw.col.speedrun.session_caps()
 
@@ -139,6 +137,66 @@ class SpeedrunSession:
         if self.mw.col.get_config(_STATE_KEY, None) is not None:
             self.mw.col.remove_config(_STATE_KEY)
 
+    def _prune_stale_questions(self) -> None:
+        """Drop persisted question ids that no longer resolve to a served
+        question, rebasing the resume indices onto the survivors.
+
+        A paused session persists ``practice_ids``/``recap_ids`` in the synced
+        ``speedrunSessionState``. If those ids become dangling — the bank was
+        re-imported with fresh note ids, or the state arrived from another
+        device whose ids differ — feeding them to the study dialog crashes it
+        with "No such note" (fetched via ``get_note`` in ``_load_question``).
+        We prune the dangling ids; if the entire persisted batch is stale (a
+        cross-collection state), we discard the session so ``start`` re-enters
+        phase 1 fresh rather than resuming dead progress. Fresh sessions (no
+        persisted ids) are left untouched — the phase builders make their own
+        lists.
+        """
+        if not self.practice_ids and not self.recap_ids:
+            return
+        valid = set(self.mw.col.speedrun.served_question_note_ids())
+        practice, practice_index = self._prune_list(
+            self.practice_ids, self.practice_index, valid
+        )
+        recap, recap_index = self._prune_list(self.recap_ids, self.recap_index, valid)
+        if not practice and not recap:
+            # Nothing survived: reset to a clean slate so start() re-enters
+            # phase 1 with a freshly served batch.
+            self._phase = 0
+            self.practice_ids = []
+            self.practice_index = 0
+            self.recap_ids = []
+            self.recap_index = 0
+            self.studied_topics = set()
+            self.missed_topics = set()
+            self.practice_shown = set()
+            self.practice_answered = 0
+            self.practice_correct = 0
+            self.recap_answered = 0
+            self.recap_correct = 0
+            self.flashcards_reviewed = 0
+            self.activated_total = 0
+            return
+        self.practice_ids = practice
+        self.practice_index = practice_index
+        self.recap_ids = recap
+        self.recap_index = recap_index
+
+    @staticmethod
+    def _prune_list(
+        ids: list[NoteId], index: int, valid: set[NoteId]
+    ) -> tuple[list[NoteId], int]:
+        """Keep only ids in ``valid``, rebasing ``index`` onto the surviving
+        prefix (shifted left by however many removed ids preceded it)."""
+        kept: list[NoteId] = []
+        new_index = 0
+        for i, nid in enumerate(ids):
+            if nid in valid:
+                if i < index:
+                    new_index += 1
+                kept.append(nid)
+        return kept, new_index
+
     # Lifecycle
     ##########################################################################
 
@@ -149,6 +207,11 @@ class SpeedrunSession:
             # A session is already running; ignore re-entry.
             return
         self.mw._speedrun_session = self  # type: ignore[attr-defined]
+        # Guard a resumed session against question ids that no longer resolve
+        # (bank re-imported with fresh ids, or state synced from another
+        # device). Must run before we dispatch into a phase — a stale id would
+        # otherwise crash the study dialog on load.
+        self._prune_stale_questions()
         # Resume into the persisted phase, or start fresh.
         if self._phase == 2:
             self._phase2()
@@ -167,9 +230,9 @@ class SpeedrunSession:
             # replay the same leading batch each time; only fall back to
             # previously-seen ones (oldest first) once the pool is exhausted.
             self.practice_ids = list(
-                self.mw.col.speedrun.served_questions_interleaved(
-                    unseen_first=True
-                )[: self.caps.practice]
+                self.mw.col.speedrun.served_questions_interleaved(unseen_first=True)[
+                    : self.caps.practice
+                ]
             )
             self.practice_index = 0
         if not self.practice_ids or self.practice_index >= len(self.practice_ids):
