@@ -49,6 +49,11 @@ class SpeedrunHome:
         # Reloading the SvelteKit page re-runs its loader, re-fetching the
         # Memory snapshot — this is how the home reflects post-session state.
         self.web.load_sveltekit_page("speedrun-home")
+        # The main window dims its webview (opacity 0.3) whenever data changes
+        # while it is unfocused, and relies on a later refresh to restore it.
+        # Reloading replaces the DOM (clearing the inline opacity), but restore
+        # it explicitly too so the home is never left stuck dimmed.
+        self.mw.fade_in_webview()
         self._refresh_needed = False
 
     def refresh_if_needed(self) -> None:
@@ -63,6 +68,15 @@ class SpeedrunHome:
             self._refresh_needed = True
         if focused:
             self.refresh_if_needed()
+        elif self._refresh_needed:
+            # We've just been dimmed by the main window (see refresh()). A
+            # focus-change event normally triggers refresh_if_needed and undims
+            # us, but at startup the transient auto-sync progress dialog and
+            # "sync complete" tooltip can own focus when this fires, without a
+            # reliable focus-return event afterwards — leaving the freshly
+            # loaded home stuck dimmed. Schedule the refresh so it runs once any
+            # progress window closes, guaranteeing the dim is cleared.
+            self.mw.progress.single_shot(0, self.refresh_if_needed)
         return self._refresh_needed
 
     # Bridge commands from the Svelte home page.
