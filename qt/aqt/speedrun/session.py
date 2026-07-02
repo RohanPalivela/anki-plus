@@ -13,14 +13,19 @@ student only answers and may stop — every transition is decided for them:
 2. **Memory flashcards** — review the activated cards with the NATIVE FSRS
    reviewer scoped to ``Speedrun::Cards``, capped at a session limit. When the
    reviewer finishes (runs out of cards) or the cap is hit, we auto-advance.
-3. **Recap** — a short capped batch of *different* served questions on the
-   topics studied this session (Phase-1 questions excluded) to measure transfer.
-   Then we return to the home state with a refreshed Memory snapshot and a brief
-   summary.
+3. **Recap** — a short capped batch of *different* served questions testing the
+   SAME MATERIAL: scoped to the fine-grained ``concept::`` slugs practised in
+   Phase 1 (Phase-1 items excluded), i.e. "same concepts, different phrasing".
+   Concept-less questions fall back to the studied topics so recap is never
+   empty. Recap NEVER unlocks new cards: unlike Practice, a wrong recap answer
+   does not offer the miss-reason chooser and triggers no activation — it only
+   reveals the explanation. We collect per-concept accuracy for a (deferred)
+   transfer score, then return home with a refreshed Memory snapshot + summary.
 
 Empty phases are skipped with a short note. The recap is treated purely as
-feedback/motivation: it never feeds the Memory score (Memory reads FSRS state of
-activated cards, which this controller does not touch).
+feedback/measurement: it never feeds the Memory score (Memory reads FSRS state
+of activated cards, which this controller does not touch), never activates
+cards, and its transfer score is scaffolded but not surfaced yet (M-future).
 """
 
 from __future__ import annotations
@@ -33,7 +38,12 @@ import aqt.main
 from anki.cards import Card
 from anki.decks import DeckId
 from anki.notes import NoteId
-from anki.speedrun import FLASHCARDS_DECK_NAME, SESSION_STATE_CONFIG_KEY
+from anki.speedrun import (
+    FLASHCARDS_DECK_NAME,
+    SESSION_STATE_CONFIG_KEY,
+    RecapScore,
+    compute_recap_score,
+)
 from aqt import gui_hooks
 from aqt.operations.deck import set_current_deck
 from aqt.speedrun.study import (
@@ -70,6 +80,10 @@ class SpeedrunSession:
         self._phase2_hooks_connected = False
         self._finished = False
         self._paused = False
+        # Whether this session has already auto-run its coverage sweep (once per
+        # session, at the Practice→Flashcards hand-off). Persisted so a resumed
+        # session doesn't sweep again on every Start.
+        self._swept = False
 
         # The two question phases persist both their (fixed) question list and
         # the resume position; the flashcard phase persists only the phase (its
@@ -81,12 +95,20 @@ class SpeedrunSession:
 
         # Aggregate tracking for the closing summary.
         self.studied_topics: set[str] = set()
+        # Fine-grained concepts practised in Phase 1 — the concrete material the
+        # student just studied. Recap is scoped to these so it re-tests the same
+        # material with different phrasing (see ``_enter_phase3``).
+        self.practiced_concepts: set[str] = set()
         self.missed_topics: set[str] = set()
         self.practice_shown: set[int] = set()
         self.practice_answered = 0
         self.practice_correct = 0
         self.recap_answered = 0
         self.recap_correct = 0
+        # Per-concept recap tallies (concept slug -> count; "" = no-concept
+        # bucket) persisted for the deferred, off-UI recap transfer score.
+        self.recap_concept_answered: dict[str, int] = {}
+        self.recap_concept_correct: dict[str, int] = {}
         self.flashcards_reviewed = 0
         self.activated_total = 0
 
@@ -103,14 +125,24 @@ class SpeedrunSession:
         self.recap_ids = [NoteId(x) for x in state.get("recap_ids", [])]
         self.recap_index = int(state.get("recap_index", 0))
         self.studied_topics = set(state.get("studied_topics", []))
+        self.practiced_concepts = set(state.get("practiced_concepts", []))
         self.missed_topics = set(state.get("missed_topics", []))
         self.practice_shown = {int(x) for x in state.get("practice_shown", [])}
         self.practice_answered = int(state.get("practice_answered", 0))
         self.practice_correct = int(state.get("practice_correct", 0))
         self.recap_answered = int(state.get("recap_answered", 0))
         self.recap_correct = int(state.get("recap_correct", 0))
+        self.recap_concept_answered = {
+            str(k): int(v)
+            for k, v in dict(state.get("recap_concept_answered", {})).items()
+        }
+        self.recap_concept_correct = {
+            str(k): int(v)
+            for k, v in dict(state.get("recap_concept_correct", {})).items()
+        }
         self.flashcards_reviewed = int(state.get("flashcards_reviewed", 0))
         self.activated_total = int(state.get("activated_total", 0))
+        self._swept = bool(state.get("swept", False))
 
     def _save_state(self) -> None:
         self.mw.col.set_config(
@@ -122,14 +154,18 @@ class SpeedrunSession:
                 "recap_ids": [int(x) for x in self.recap_ids],
                 "recap_index": self.recap_index,
                 "studied_topics": sorted(self.studied_topics),
+                "practiced_concepts": sorted(self.practiced_concepts),
                 "missed_topics": sorted(self.missed_topics),
                 "practice_shown": sorted(self.practice_shown),
                 "practice_answered": self.practice_answered,
                 "practice_correct": self.practice_correct,
                 "recap_answered": self.recap_answered,
                 "recap_correct": self.recap_correct,
+                "recap_concept_answered": self.recap_concept_answered,
+                "recap_concept_correct": self.recap_concept_correct,
                 "flashcards_reviewed": self.flashcards_reviewed,
                 "activated_total": self.activated_total,
+                "swept": self._swept,
             },
         )
 
@@ -168,14 +204,18 @@ class SpeedrunSession:
             self.recap_ids = []
             self.recap_index = 0
             self.studied_topics = set()
+            self.practiced_concepts = set()
             self.missed_topics = set()
             self.practice_shown = set()
             self.practice_answered = 0
             self.practice_correct = 0
             self.recap_answered = 0
             self.recap_correct = 0
+            self.recap_concept_answered = {}
+            self.recap_concept_correct = {}
             self.flashcards_reviewed = 0
             self.activated_total = 0
+            self._swept = False
             return
         self.practice_ids = practice
         self.practice_index = practice_index
@@ -250,6 +290,7 @@ class SpeedrunSession:
     def _on_phase1_finish(self, result: StudyPhaseResult) -> None:
         self._dialog = None
         self.studied_topics |= result.involved_topics
+        self.practiced_concepts |= result.involved_concepts
         self.missed_topics |= result.missed_topics
         self.practice_shown |= {int(nid) for nid in result.shown_note_ids}
         self.practice_answered += result.answered_count
@@ -267,6 +308,11 @@ class SpeedrunSession:
 
     def _phase2(self) -> None:
         self._phase = 2
+        # Auto-run the coverage sweep once per session at the Practice→Flashcards
+        # hand-off, so activation coverage grows across all blueprint topics
+        # without the student ever pressing "Run sweep". Newly re-activated cards
+        # then become reviewable in this very phase.
+        self._maybe_run_coverage_sweep()
         deck_id = self.mw.col.decks.id_for_name(FLASHCARDS_DECK_NAME)
         if deck_id is None:
             self._goto(self._enter_phase3)
@@ -275,6 +321,24 @@ class SpeedrunSession:
         set_current_deck(parent=self.mw, deck_id=DeckId(deck_id)).success(
             lambda _: self._begin_flashcard_review()
         ).run_in_background()
+
+    def _maybe_run_coverage_sweep(self) -> None:
+        """Run the coverage sweep exactly once per session (idempotent on
+        resume). Uses the configured default sample size and folds the count
+        into the session tally so the summary reflects it."""
+        if self._swept:
+            return
+        try:
+            resp = self.mw.col.speedrun.run_coverage_sweep()
+        except Exception:
+            # A sweep failure must never block the flashcard phase. Leave
+            # `_swept` False and unpersisted so a transient failure retries on
+            # the next entry/launch instead of being skipped forever (parity
+            # with Android's maybeRunCoverageSweep).
+            return
+        self._swept = True
+        self.activated_total += len(resp.activated_card_ids)
+        self._save_state()
 
     def _begin_flashcard_review(self) -> None:
         if self._phase != 2:
@@ -352,9 +416,23 @@ class SpeedrunSession:
         if not self.recap_ids:
             recap_ids: list[NoteId] = []
             if self.studied_topics:
+                # Recap tests the SAME MATERIAL as Phase 1: scope to the
+                # concepts just practised (distinct questions of those concepts
+                # = "same material, different phrasing"), excluding the exact
+                # Phase-1 items. Concept-less questions fall back to the studied
+                # topics inside served_questions_interleaved, so recap is never
+                # empty when concept tags are sparse. unseen_first keeps the
+                # transfer check on fresh questions rather than replaying the
+                # same front-of-pool items each run.
+                #
+                # NOTE: true paraphrase VARIANTS (rewording the very same item)
+                # are a future content enhancement; concept-matched distinct
+                # items are today's best "same material, different phrasing".
                 recap_ids = self.mw.col.speedrun.served_questions_interleaved(
                     topics=self.studied_topics,
+                    concepts=self.practiced_concepts or None,
                     exclude=set(self.practice_shown),
+                    unseen_first=True,
                 )[: self.caps.recap]
             self.recap_ids = [NoteId(x) for x in recap_ids]
             self.recap_index = 0
@@ -374,9 +452,18 @@ class SpeedrunSession:
         self._dialog = None
         self.recap_answered += result.answered_count
         self.recap_correct += result.correct_count
-        # Recap is feedback only: activation is fine, but it must not (and does
-        # not) inflate Memory, which reads FSRS state of the flashcards.
-        self.activated_total += result.activated_total
+        # Recap re-tests the SAME material and MUST NOT activate/unlock cards, so
+        # nothing is folded into ``activated_total`` here (the study surface also
+        # never offers the miss chooser in recap, so result.activated_total is 0).
+        # Accumulate per-concept tallies for the deferred recap transfer score.
+        for concept, count in result.concept_answered.items():
+            self.recap_concept_answered[concept] = (
+                self.recap_concept_answered.get(concept, 0) + count
+            )
+        for concept, count in result.concept_correct.items():
+            self.recap_concept_correct[concept] = (
+                self.recap_concept_correct.get(concept, 0) + count
+            )
         if not result.completed:
             self.recap_index = result.resume_index
             self._pause()
@@ -445,7 +532,26 @@ class SpeedrunSession:
                 sorted(topic.replace("-", " ") for topic in self.studied_topics)
             )
             lines.append(tr.speedrun_session_complete_topics(topics=topics))
+        # TODO(M-future): once recap scoring is un-deferred, surface
+        # ``self.recap_score()`` here (overall transfer % + weakest concepts).
+        # Deliberately NOT shown yet — see ``recap_score``.
         tooltip("<br>".join(lines), period=7000, parent=self.mw)
+
+    def recap_score(self) -> RecapScore:
+        """Compute the (deferred, off-UI) recap transfer score from the
+        per-concept tallies collected this session.
+
+        HOOK ONLY — intentionally not surfaced anywhere yet (the user asked to
+        defer scoring until the recap-selection / no-activation changes are in
+        place). The data plumbing is complete: this returns the overall + per
+        -concept recap accuracy so a future milestone (M-future) can display it
+        in the session summary / home / dashboard without more plumbing. See
+        :func:`anki.speedrun.compute_recap_score` for the (simple, upgradeable)
+        formula.
+        """
+        return compute_recap_score(
+            self.recap_concept_answered, self.recap_concept_correct
+        )
 
 
 def start_session(mw: aqt.main.AnkiQt) -> None:

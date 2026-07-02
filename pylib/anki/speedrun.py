@@ -122,9 +122,7 @@ BANK_AI_GENERATED_TAG = "bank::ai-generated"
 #: Vendored, pre-normalized bank shipped next to this module (resolves in dev,
 #: tests, and the wheel via the package dir). Gzipped so the repo carries a
 #: single small binary blob instead of a huge JSON text diff.
-DEFAULT_BANK_PATH = (
-    Path(__file__).parent / "data" / "speedrun_question_bank.json.gz"
-)
+DEFAULT_BANK_PATH = Path(__file__).parent / "data" / "speedrun_question_bank.json.gz"
 
 
 def load_question_bank(path: str | Path | None = None) -> dict[str, Any]:
@@ -360,7 +358,9 @@ def topic_of_note(note: Note) -> str | None:
 
 def topics_of_note(note: Note) -> list[str]:
     """All bare topic names from a note's ``topic::`` tags (usually one)."""
-    return [t[len(TOPIC_TAG_PREFIX) :] for t in note.tags if t.startswith(TOPIC_TAG_PREFIX)]
+    return [
+        t[len(TOPIC_TAG_PREFIX) :] for t in note.tags if t.startswith(TOPIC_TAG_PREFIX)
+    ]
 
 
 def concept_of_note(note: Note) -> str | None:
@@ -369,6 +369,19 @@ def concept_of_note(note: Note) -> str | None:
         if tag.startswith(CONCEPT_TAG_PREFIX):
             return tag[len(CONCEPT_TAG_PREFIX) :]
     return None
+
+
+def concepts_of_note(note: Note) -> list[str]:
+    """All bare concept names from a note's ``concept::`` tags (usually one).
+
+    Mirrors :func:`topics_of_note`; used alongside :func:`concept_of_note` when
+    scoping the guided-session recap to the concepts practised in Phase 1.
+    """
+    return [
+        t[len(CONCEPT_TAG_PREFIX) :]
+        for t in note.tags
+        if t.startswith(CONCEPT_TAG_PREFIX)
+    ]
 
 
 #: Common English + MCAT-generic tokens that carry no discriminating signal for
@@ -440,6 +453,92 @@ def correct_index(correct_field: str, num_options: int) -> int:
         except ValueError:
             return -1
     return idx if 0 <= idx < num_options else -1
+
+
+# Recap transfer scoring (scaffold — deferred; see M-future note) --------------
+#
+# The guided session's Recap phase re-tests the *same concepts* practised in
+# Phase 1 with distinct questions ("same material, different phrasing"), so its
+# accuracy is a transfer signal: did studying the linked memory cards make each
+# concept stick on a *fresh* item? The session controller persists per-concept
+# ``(answered, correct)`` tallies in its state; this pure function turns those
+# tallies into a score.
+#
+# NOT SURFACED YET (by design): the user explicitly wants scoring deferred until
+# the recap-selection / no-activation changes have bedded in, so nothing here is
+# shown in the session summary or the home/dashboard. The current formula is a
+# simple accuracy — the overall is micro-averaged across all answered recap
+# items, and each concept reports its own ratio.
+#
+# FUTURE (M-future): weight each concept by its blueprint topic weight (and/or
+# item difficulty_b / discrimination_a) so the overall transfer score reflects
+# exam-blueprint importance rather than treating every concept equally. The
+# per-concept breakdown already gives the surface the data it needs for that.
+
+
+@dataclass
+class ConceptRecapScore:
+    """Recap accuracy for a single concept.
+
+    The empty-string concept (``""``) is the topic-fallback bucket used for
+    recap questions that carry no ``concept::`` tag.
+    """
+
+    concept: str
+    answered: int
+    correct: int
+
+    @property
+    def accuracy(self) -> float:
+        """Fraction correct in [0, 1]; 0.0 when nothing was answered."""
+        return self.correct / self.answered if self.answered else 0.0
+
+
+@dataclass
+class RecapScore:
+    """Aggregate recap/transfer score plus its per-concept breakdown."""
+
+    answered: int
+    correct: int
+    #: Micro-averaged overall accuracy in [0, 1]; 0.0 when nothing was answered.
+    overall: float
+    per_concept: list[ConceptRecapScore]
+
+
+def compute_recap_score(
+    answered_by_concept: dict[str, int],
+    correct_by_concept: dict[str, int],
+) -> RecapScore:
+    """Pure transfer-score computation from per-concept recap tallies.
+
+    ``answered_by_concept`` / ``correct_by_concept`` map a concept slug (the
+    empty string ``""`` is the topic-fallback bucket for recap questions with no
+    ``concept::`` tag) to how many recap questions of that concept were answered
+    / answered correctly. Returns the overall micro-averaged accuracy and a
+    stable, concept-sorted per-concept breakdown.
+
+    Intentionally simple for now (see the module note above for the intended
+    future blueprint-weighted formula) and kept pure — no collection, no I/O —
+    so it is trivially unit-testable and reusable by any surface once recap
+    scoring is actually shown.
+    """
+    per_concept = [
+        ConceptRecapScore(
+            concept=concept,
+            answered=answered_by_concept.get(concept, 0),
+            correct=correct_by_concept.get(concept, 0),
+        )
+        for concept in sorted(answered_by_concept)
+    ]
+    total_answered = sum(answered_by_concept.values())
+    total_correct = sum(correct_by_concept.values())
+    overall = total_correct / total_answered if total_answered else 0.0
+    return RecapScore(
+        answered=total_answered,
+        correct=total_correct,
+        overall=overall,
+        per_concept=per_concept,
+    )
 
 
 class Speedrun:
@@ -733,9 +832,7 @@ class Speedrun:
                 and t[len(GATES_TAG_PREFIX) :].isdigit()
             )
             if desired != existing:
-                note.tags = [
-                    t for t in note.tags if not t.startswith(GATES_TAG_PREFIX)
-                ]
+                note.tags = [t for t in note.tags if not t.startswith(GATES_TAG_PREFIX)]
                 note.tags.extend(f"{GATES_TAG_PREFIX}{cid}" for cid in desired)
                 changed.append(note)
             if desired:
@@ -975,14 +1072,27 @@ class Speedrun:
         self,
         *,
         topics: set[str] | None = None,
+        concepts: set[str] | None = None,
         exclude: set[int] | None = None,
         unseen_first: bool = False,
     ) -> list[NoteId]:
         """Served question note ids interleaved across topics (no topic blocking).
 
-        ``topics`` restricts the result to those bare topic names (used by the
-        recap phase to target only the just-studied topics); ``exclude`` drops
-        specific note ids (used to keep the recap set disjoint from Phase 1).
+        ``topics`` restricts the result to those bare topic names; ``exclude``
+        drops specific note ids (used to keep the recap set disjoint from
+        Phase 1).
+
+        ``concepts`` restricts to those fine-grained ``concept::`` slugs so the
+        recap tests the *same material* practised in Phase 1 ("same concepts,
+        different phrasing") rather than merely the same coarse topics. A
+        question that carries a ``concept::`` tag is kept only when its concept
+        is in ``concepts``; a question with **no** concept falls back to the
+        ``topics`` scope (so recap is never empty when concepts are sparse — the
+        bank only tags ~82% of served questions with a concept). ``concepts`` is
+        ANDed with ``topics`` when both are given. NOTE: matching a *distinct*
+        question of the same concept is today's best "same material, different
+        phrasing"; true paraphrase VARIANTS (rewording the very same item) are a
+        future content enhancement, not something the bank carries yet.
 
         ``unseen_first`` orders never-practised questions (their card has zero
         reps) ahead of already-practised ones so a capped batch (e.g. a guided
@@ -991,19 +1101,29 @@ class Speedrun:
         seen questions come back rotated oldest-review-first, so repeats are the
         least recently seen rather than always the same leading batch.
 
-        Note: this loads each served note to read its ``topic::`` tag (and, when
-        ``unseen_first`` is set, its card's review state). The served pool is
-        small (tens of items) so this is cheap; revisit if it grows.
+        Note: this loads each served note to read its ``topic::`` / ``concept::``
+        tag (and, when ``unseen_first`` is set, its card's review state). The
+        served pool is small (tens of items) so this is cheap; revisit if it
+        grows.
         """
         exclude = exclude or set()
 
         def in_scope(nid: NoteId) -> str | None:
-            """Return the bare topic if ``nid`` is in scope, else ``None``."""
+            """Return the bare topic (round-robin key) if ``nid`` is in scope,
+            else ``None``."""
             if nid in exclude:
                 return None
-            topic = topic_of_note(self.col.get_note(nid)) or ""
+            note = self.col.get_note(nid)
+            topic = topic_of_note(note) or ""
             if topics is not None and topic not in topics:
                 return None
+            if concepts is not None:
+                concept = concept_of_note(note)
+                # Concept-tagged questions must match a practised concept; a
+                # question with no concept falls back to the topic scope above
+                # so concept-scoped recap is never starved when tags are sparse.
+                if concept is not None and concept not in concepts:
+                    return None
             return topic
 
         if not unseen_first:

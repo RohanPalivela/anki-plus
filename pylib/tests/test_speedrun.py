@@ -6,17 +6,21 @@ from anki.decks import DeckId
 from anki.speedrun import (
     BANK_AI_GENERATED_TAG,
     BANK_TAG,
+    BANK_UID_TAG_PREFIX,
     DEFAULT_BANK_PATH,
     DEFAULT_FIRST_PRINCIPLES_PATH,
     DEFAULT_MCAT_BLUEPRINT,
     FIRST_PRINCIPLES_TAG,
     FLASHCARDS_DECK_NAME,
+    GATES_LINKED_CONFIG_KEY,
+    GATES_TAG_PREFIX,
     LEGACY_DEMO_TAG,
     QUESTION_FIELDS,
     QUESTION_NOTETYPE_NAME,
     QUESTIONS_DECK_NAME,
     SESSION_STATE_CONFIG_KEY,
     MissReason,
+    compute_recap_score,
     load_first_principles,
     load_question_bank,
 )
@@ -49,9 +53,7 @@ def _seed_graded_flashcards(col, topics, per_topic=5):
     elapsed_ratios = [0.2, 0.4, 0.7, 1.0, 1.6, 2.5, 4.0]
     stability_days = 80.0
     for i, topic in enumerate(topics):
-        elapsed = int(
-            elapsed_ratios[i % len(elapsed_ratios)] * stability_days * 86400
-        )
+        elapsed = int(elapsed_ratios[i % len(elapsed_ratios)] * stability_days * 86400)
         for _ in range(per_topic):
             note = _add_note(col, [f"topic::{topic}"])
             for card in note.cards():
@@ -86,6 +88,36 @@ def test_activate_cards_for_miss_rpc():
     )
     assert list(resp.activated_card_ids) == []
     assert all(c.queue == QUEUE_TYPE_SUSPENDED for c in flashcard.cards())
+
+
+def test_gates_linkage_prefers_named_cards_over_topic():
+    """A question carrying a resolvable ``gates::<nid>`` tag activates exactly
+    the named card, not its whole coarse ``topic::`` set (precise > coarse)."""
+    col = getEmptyCol()
+    gated = _add_note(col, ["topic::biochem"])
+    sibling = _add_note(col, ["topic::biochem"])
+    gated_cids = [c.id for c in gated.cards()]
+    sibling_cids = [c.id for c in sibling.cards()]
+    col.sched.suspend_cards(gated_cids + sibling_cids)
+
+    question = _add_note(col, ["topic::biochem", f"gates::{gated.id}"])
+    resp = col.speedrun.activate_cards_for_miss(question.id, MissReason.KNOWLEDGE_GAP)
+    assert sorted(resp.activated_card_ids) == sorted(gated_cids)
+    # The topic-only sibling stays suspended: precise gates linkage wins.
+    assert all(col.get_card(c).queue == QUEUE_TYPE_SUSPENDED for c in sibling_cids)
+
+
+def test_dangling_gates_falls_back_to_topic_linkage():
+    """A ``gates::`` tag that resolves to nothing usable falls back to topic
+    linkage rather than silently activating zero cards for a legit miss."""
+    col = getEmptyCol()
+    sibling = _add_note(col, ["topic::physics"])
+    sibling_cids = [c.id for c in sibling.cards()]
+    col.sched.suspend_cards(sibling_cids)
+
+    question = _add_note(col, ["topic::physics", "gates::999999999"])
+    resp = col.speedrun.activate_cards_for_miss(question.id, MissReason.KNOWLEDGE_GAP)
+    assert sorted(resp.activated_card_ids) == sorted(sibling_cids)
 
 
 def test_record_miss_reason_sets_latest_tag_and_activates():
@@ -370,6 +402,144 @@ def test_served_questions_unseen_first_avoids_repeats():
     assert set(rotated[:3]) == set(first_batch)
 
 
+def _glycolysis_scenario(col):
+    """Import one biology question that clearly concerns glycolysis plus two
+    biology first-principles cards (glycolysis + membrane transport), so the
+    linkage pass has a genuine signal to pick the precise card. Returns
+    (question_nid, glycolysis_fp_nid, membrane_fp_nid)."""
+    col.speedrun.setup_mcat()
+    col.speedrun.import_question_bank(
+        questions=[
+            {
+                **_sample_bank()[0],
+                "uid": "q-glyc",
+                "topics": ["biology"],
+                "pool": "served",
+                "stem": (
+                    "During glycolysis, what is the net yield of ATP and NADH "
+                    "per glucose molecule?"
+                ),
+                "options": ["1 ATP", "2 ATP and 2 NADH", "36 ATP", "none"],
+                "correct": "B",
+                "explanation": (
+                    "Glycolysis nets two ATP and two NADH per glucose in the cytoplasm."
+                ),
+            }
+        ]
+    )
+    col.speedrun.import_first_principles(
+        cards=[
+            {
+                "uid": "fp-glyc-1",
+                "topic": "biology",
+                "concept": "glycolysis",
+                "front": "What is the net yield of glycolysis?",
+                "back": "Glucose to two pyruvate nets two ATP and two NADH.",
+            },
+            {
+                "uid": "fp-mem-1",
+                "topic": "biology",
+                "concept": "membrane-transport",
+                "front": "Passive vs active transport?",
+                "back": "Passive moves down the gradient; active spends ATP.",
+            },
+        ]
+    )
+    question = col.speedrun.served_question_note_ids()[0]
+    glyc = col.find_notes(f"tag:{FIRST_PRINCIPLES_TAG} tag:concept::glycolysis")[0]
+    mem = col.find_notes(f"tag:{FIRST_PRINCIPLES_TAG} tag:concept::membrane-transport")[
+        0
+    ]
+    return question, glyc, mem
+
+
+def test_import_emits_precise_gates_for_matching_question():
+    """(a) The import/linkage pass stamps a precise ``gates::`` tag pointing at
+    only the first-principles card the question actually concerns."""
+    col = getEmptyCol()
+    question, glyc, mem = _glycolysis_scenario(col)
+
+    gates = [t for t in col.get_note(question).tags if t.startswith(GATES_TAG_PREFIX)]
+    # Precise: linked to the glycolysis card, not the membrane-transport one.
+    assert gates == [f"{GATES_TAG_PREFIX}{glyc}"]
+    assert f"{GATES_TAG_PREFIX}{mem}" not in gates
+    # The pass marks the collection as linked (so back-fill runs once).
+    assert col.get_config(GATES_LINKED_CONFIG_KEY) is True
+
+
+def test_link_gated_first_principles_is_idempotent():
+    """(b) Re-running the linkage pass writes nothing and never duplicates."""
+    col = getEmptyCol()
+    question, _glyc, _mem = _glycolysis_scenario(col)
+
+    tags_before = list(col.get_note(question).tags)
+    summary = col.speedrun.link_gated_first_principles()
+    assert summary.notes_updated == 0  # already linked at import time
+    tags_after = list(col.get_note(question).tags)
+    assert tags_after == tags_before
+    # Exactly one gates:: tag — no accumulation across runs.
+    assert sum(t.startswith(GATES_TAG_PREFIX) for t in tags_after) == 1
+
+
+def test_gates_path_activates_precise_first_principles_card():
+    """(c) End-to-end: a miss on the glycolysis question activates only the
+    glycolysis card via the gates path, not the whole biology topic."""
+    col = getEmptyCol()
+    question, glyc, mem = _glycolysis_scenario(col)
+
+    glyc_cids = col.find_cards(f"nid:{glyc}")
+    mem_cids = col.find_cards(f"nid:{mem}")
+    assert all(col.get_card(c).queue == QUEUE_TYPE_SUSPENDED for c in glyc_cids)
+    assert all(col.get_card(c).queue == QUEUE_TYPE_SUSPENDED for c in mem_cids)
+
+    resp = col.speedrun.record_miss_reason(int(question), MissReason.KNOWLEDGE_GAP)
+    assert set(resp.activated_card_ids) == set(glyc_cids)
+    assert all(col.get_card(c).queue != QUEUE_TYPE_SUSPENDED for c in glyc_cids)
+    # The other topic card stays suspended — precision, not whole-topic.
+    assert all(col.get_card(c).queue == QUEUE_TYPE_SUSPENDED for c in mem_cids)
+
+
+def test_no_first_principles_leaves_no_gates_and_uses_topic_fallback():
+    """(d) A question whose topic has no first-principles card gets no
+    ``gates::`` tag and still activates its topic-linked cards via the Rust
+    topic fallback — activation is never broken."""
+    col = getEmptyCol()
+    col.speedrun.setup_mcat()
+    col.speedrun.import_question_bank(
+        questions=[
+            {**_sample_bank()[0], "uid": "q-x", "topics": ["biology"], "pool": "served"}
+        ]
+    )
+    # A topic-linked flashcard that is NOT a first-principles card.
+    flashcard = _add_note(col, ["topic::biology"])
+    cids = [c.id for c in flashcard.cards()]
+    col.sched.suspend_cards(cids)
+
+    col.speedrun.link_gated_first_principles()
+    question = col.speedrun.served_question_note_ids()[0]
+    assert not [
+        t for t in col.get_note(question).tags if t.startswith(GATES_TAG_PREFIX)
+    ]
+
+    resp = col.speedrun.record_miss_reason(int(question), MissReason.KNOWLEDGE_GAP)
+    assert set(resp.activated_card_ids) == set(cids)
+
+
+def test_ensure_gates_linked_runs_once_then_noops():
+    """The back-fill helper links a legacy collection exactly once."""
+    col = getEmptyCol()
+    _glycolysis_scenario(col)
+    # Import already linked + set the flag, so ensure_* is a no-op.
+    assert col.speedrun.ensure_gates_linked() is None
+
+    # Simulate a legacy collection (bank present, flag never set).
+    col.remove_config(GATES_LINKED_CONFIG_KEY)
+    summary = col.speedrun.ensure_gates_linked()
+    assert summary is not None
+    assert summary.served_questions >= 1
+    assert col.get_config(GATES_LINKED_CONFIG_KEY) is True
+
+
 def _sample_first_principles() -> list[dict]:
     return [
         {
@@ -468,7 +638,9 @@ def test_vendored_first_principles_ship_and_are_not_restated_questions():
     }
     for card in cards:
         front = " ".join(card["front"].split())
-        assert front not in bank_stems, f"FP card restates a bank question: {card['uid']}"
+        assert front not in bank_stems, (
+            f"FP card restates a bank question: {card['uid']}"
+        )
 
     # Imports cleanly into a real collection.
     col = getEmptyCol()
@@ -496,9 +668,7 @@ def test_reset_profile_clears_progress_but_keeps_content():
     served = col.speedrun.served_question_note_ids()
     col.speedrun.record_miss_reason(int(served[0]), MissReason.KNOWLEDGE_GAP)
     bio_fp = col.find_cards(f"tag:topic::biology tag:{FIRST_PRINCIPLES_TAG}")
-    assert bio_fp and all(
-        col.get_card(c).queue != QUEUE_TYPE_SUSPENDED for c in bio_fp
-    )
+    assert bio_fp and all(col.get_card(c).queue != QUEUE_TYPE_SUSPENDED for c in bio_fp)
 
     # Grade it (simulate an FSRS review) so it reads as graded, then leave a
     # paused guided-session behind.
@@ -570,3 +740,124 @@ def test_memory_dashboard_populated_after_reviews():
     # Per-topic mastery shows a real spread (value ordering is meaningful).
     masteries = sorted(t.mastery for t in score.topics if t.known)
     assert masteries[0] < masteries[-1]
+
+
+# Recap: same-material (concept-scoped) selection + transfer scoring scaffold
+##############################################################################
+
+
+def _bank_uid_index(col) -> dict[str, int]:
+    """Map each served question's ``bankuid::`` to its note id."""
+    index: dict[str, int] = {}
+    for nid in col.speedrun.served_question_note_ids():
+        note = col.get_note(nid)
+        uid = next(
+            t[len(BANK_UID_TAG_PREFIX) :]
+            for t in note.tags
+            if t.startswith(BANK_UID_TAG_PREFIX)
+        )
+        index[uid] = int(nid)
+    return index
+
+
+def test_recap_selection_scoped_to_practiced_concepts():
+    """Recap selects distinct questions of the SAME concepts practised in
+    Phase 1 (not merely the same topic), excludes the exact Phase-1 item, and
+    falls back to topic scope for concept-less questions so it is never empty."""
+    col = getEmptyCol()
+    col.speedrun.setup_mcat()
+    col.speedrun.import_question_bank(
+        questions=[
+            # Two glycolysis (same concept) biology questions,
+            {
+                **_sample_bank()[0],
+                "uid": "glyc-a",
+                "topics": ["biology"],
+                "concept": "glycolysis",
+                "pool": "served",
+            },
+            {
+                **_sample_bank()[0],
+                "uid": "glyc-b",
+                "topics": ["biology"],
+                "concept": "glycolysis",
+                "pool": "served",
+            },
+            # a different-concept biology question (same topic, other material),
+            {
+                **_sample_bank()[0],
+                "uid": "mem-a",
+                "topics": ["biology"],
+                "concept": "membrane-transport",
+                "pool": "served",
+            },
+            # a concept-less biology question (topic-fallback candidate),
+            {
+                **_sample_bank()[0],
+                "uid": "bare-a",
+                "topics": ["biology"],
+                "pool": "served",
+            },
+            # and an unrelated-topic question.
+            {
+                **_sample_bank()[0],
+                "uid": "phys-a",
+                "topics": ["physics"],
+                "concept": "work-energy",
+                "pool": "served",
+            },
+        ]
+    )
+    by_uid = _bank_uid_index(col)
+
+    # Phase 1 practised the glycolysis biology question "glyc-a".
+    recap = col.speedrun.served_questions_interleaved(
+        topics={"biology"},
+        concepts={"glycolysis"},
+        exclude={by_uid["glyc-a"]},
+    )
+
+    # Same material, different item: the other glycolysis question is included.
+    assert by_uid["glyc-b"] in recap
+    # Topic fallback: the concept-less biology question is included (never empty).
+    assert by_uid["bare-a"] in recap
+    # The exact Phase-1 item is excluded (recap re-tests, not replays).
+    assert by_uid["glyc-a"] not in recap
+    # Different concept in the same topic is NOT "same material".
+    assert by_uid["mem-a"] not in recap
+    # Unrelated topic is excluded by the topic scope.
+    assert by_uid["phys-a"] not in recap
+
+
+def test_compute_recap_score_overall_and_per_concept():
+    """The pure transfer score micro-averages overall accuracy and reports a
+    stable, concept-sorted per-concept breakdown (incl. the "" fallback bucket)."""
+    answered = {"glycolysis": 4, "membrane-transport": 2, "": 2}
+    correct = {"glycolysis": 3, "membrane-transport": 1}
+
+    score = compute_recap_score(answered, correct)
+
+    assert score.answered == 8
+    assert score.correct == 4
+    assert score.overall == 0.5  # 4 / 8, micro-averaged across all items
+    # Stable order, sorted by concept slug ("" sorts first).
+    assert [c.concept for c in score.per_concept] == [
+        "",
+        "glycolysis",
+        "membrane-transport",
+    ]
+    per = {c.concept: c for c in score.per_concept}
+    assert per["glycolysis"].accuracy == 0.75
+    assert per["membrane-transport"].accuracy == 0.5
+    # A concept answered but never correct reports 0.0 (no ZeroDivision).
+    assert per[""].answered == 2 and per[""].correct == 0
+    assert per[""].accuracy == 0.0
+
+
+def test_compute_recap_score_empty_abstains_without_error():
+    """No recap answers yet -> a zeroed score, never a divide-by-zero."""
+    score = compute_recap_score({}, {})
+    assert score.answered == 0
+    assert score.correct == 0
+    assert score.overall == 0.0
+    assert score.per_concept == []

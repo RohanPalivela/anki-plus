@@ -14,6 +14,12 @@ The dialog backs both the standalone Tools entry (all served questions) and the
 Tier-2 guided session (Phase 1 "Practice" / Phase 3 "Recap"): the session
 controller injects an explicit question list, a mode/title, and an on-finish
 callback so it can drive the fixed sequence.
+
+MODE_RECAP is special: it re-tests the *same material* (same concepts, distinct
+questions) to measure transfer, so a wrong recap answer NEVER offers the
+miss-reason chooser and NEVER activates/unsuspends cards — it only reveals the
+correct answer + explanation (see :func:`offers_activation`). The answer is
+still graded through the native path, so recap accuracy lands in ``revlog``.
 """
 
 from __future__ import annotations
@@ -29,6 +35,7 @@ from anki.notes import NoteId
 from anki.speedrun import (
     QUESTION_NOTETYPE_NAME,
     MissReason,
+    concept_of_note,
     correct_index,
     option_lines,
     topic_of_note,
@@ -41,6 +48,21 @@ from aqt.utils import disable_help_button, restoreGeom, saveGeom, tooltip, tr
 MODE_STANDALONE = "standalone"
 MODE_PRACTICE = "practice"
 MODE_RECAP = "recap"
+
+
+def offers_activation(mode: str, is_correct: bool) -> bool:
+    """Whether a wrong answer in ``mode`` should offer the miss-reason chooser.
+
+    The chooser is the only path that can unsuspend/activate linked memory
+    cards. RECAP deliberately returns ``False``: recap re-tests the *same
+    material* the student just practised, so a wrong recap answer only reveals
+    the correct answer + explanation (no activation side effects, no unlocking
+    of new cards). Grading via the native answer path still happens either way,
+    so recap accuracy is recorded in ``revlog``. Kept as a tiny pure function so
+    the recap-never-activates invariant is unit-testable.
+    """
+    return not is_correct and mode != MODE_RECAP
+
 
 # (MissReason, label, hint) for the four chooser buttons.
 _MISS_BUTTONS = [
@@ -62,11 +84,20 @@ class StudyPhaseResult:
     shown_note_ids: list[NoteId] = field(default_factory=list)
     #: Bare topic names of every question shown this phase.
     involved_topics: set[str] = field(default_factory=set)
+    #: Bare concept slugs of every question shown this phase (drives the
+    #: session's ``practiced_concepts`` set for concept-scoped recap selection).
+    involved_concepts: set[str] = field(default_factory=set)
     #: Bare topic names of questions answered incorrectly this phase.
     missed_topics: set[str] = field(default_factory=set)
     answered_count: int = 0
     correct_count: int = 0
     activated_total: int = 0
+    #: Per-concept recap tallies (concept slug -> count). The empty string is
+    #: the topic-fallback bucket for questions with no ``concept::`` tag. Fed
+    #: into the (deferred, off-UI) recap transfer score. Populated in every mode
+    #: but only consumed for the Recap phase.
+    concept_answered: dict[str, int] = field(default_factory=dict)
+    concept_correct: dict[str, int] = field(default_factory=dict)
     #: Index into the injected question list to resume at if the phase was
     #: stopped early (the question the student was on, or the next one if the
     #: current question was already answered). Only meaningful when
@@ -101,8 +132,14 @@ class SpeedrunStudyDialog(QDialog):
         self._dirty = False
 
         if note_ids is None:
+            # Standalone study reuses the same anti-repeat ordering the guided
+            # Practice phase uses: never-practised questions first, then repeats
+            # oldest-review-first. Answering a question writes a native review
+            # (revlog + card reps/last_review), which persists across sessions,
+            # so a returning student sees fresh questions instead of the same
+            # fixed front-of-pool batch every time.
             self.note_ids: list[NoteId] = list(
-                mw.col.speedrun.served_question_note_ids()
+                mw.col.speedrun.served_questions_interleaved(unseen_first=True)
             )
         else:
             self.note_ids = list(note_ids)
@@ -120,8 +157,14 @@ class SpeedrunStudyDialog(QDialog):
         # Session tracking surfaced to the controller via StudyPhaseResult.
         self.shown_note_ids: list[NoteId] = []
         self.involved_topics: set[str] = set()
+        self.involved_concepts: set[str] = set()
         self.missed_topics: set[str] = set()
+        # Per-concept recap tallies (concept slug -> count; "" = no-concept
+        # bucket) feeding the deferred recap transfer score.
+        self.concept_answered: dict[str, int] = {}
+        self.concept_correct: dict[str, int] = {}
         self._current_topic: str | None = None
+        self._current_concept: str | None = None
         self._completed = False
         self._finish_emitted = False
         self._at_end = False
@@ -272,10 +315,13 @@ class SpeedrunStudyDialog(QDialog):
         bare_topic = topic_of_note(note)
         topic = bare_topic or "—"
         self._current_topic = bare_topic
+        self._current_concept = concept_of_note(note)
         if note_id not in self.shown_note_ids:
             self.shown_note_ids.append(note_id)
         if bare_topic:
             self.involved_topics.add(bare_topic)
+        if self._current_concept:
+            self.involved_concepts.add(self._current_concept)
         self.progress_label.setText(
             tr.speedrun_study_progress(
                 current_count=self.index + 1, total_count=len(self.note_ids)
@@ -325,8 +371,17 @@ class SpeedrunStudyDialog(QDialog):
         self.mw.col.sched.answerCard(card, 3 if is_correct else 1, from_queue=False)
 
         self.answered_count += 1
+        # Per-concept tally for the (deferred) recap transfer score. Bucket
+        # concept-less questions under "" so overall accuracy still counts them.
+        concept_key = self._current_concept or ""
+        self.concept_answered[concept_key] = (
+            self.concept_answered.get(concept_key, 0) + 1
+        )
         if is_correct:
             self.correct_count += 1
+            self.concept_correct[concept_key] = (
+                self.concept_correct.get(concept_key, 0) + 1
+            )
             self.result_label.setText(tr.speedrun_study_correct())
             self.result_label.setStyleSheet(
                 "font-weight: bold; font-size: 15px; color: #2e7d32;"
@@ -348,10 +403,13 @@ class SpeedrunStudyDialog(QDialog):
         )
         self.explanation_label.setVisible(True)
 
-        if is_correct:
-            self.next_button.setVisible(True)
-        else:
+        # RECAP never offers the miss chooser (its only activation path), so a
+        # wrong recap answer just reveals the explanation + a Next button: same
+        # material re-tested, zero activation / card-unlocking side effects.
+        if offers_activation(self.mode, is_correct):
             self.miss_container.setVisible(True)
+        else:
+            self.next_button.setVisible(True)
         self._update_tally()
 
     def _on_miss_reason(self, reason: MissReason.V) -> None:
@@ -385,9 +443,7 @@ class SpeedrunStudyDialog(QDialog):
         be excluded — otherwise every topic looks like it has linked cards."""
         if not self._current_topic:
             return False
-        query = (
-            f"tag:topic::{self._current_topic} -note:{QUESTION_NOTETYPE_NAME}"
-        )
+        query = f"tag:topic::{self._current_topic} -note:{QUESTION_NOTETYPE_NAME}"
         return bool(self.mw.col.find_cards(query))
 
     def _on_next(self) -> None:
@@ -464,10 +520,13 @@ class SpeedrunStudyDialog(QDialog):
                 completed=self._completed,
                 shown_note_ids=list(self.shown_note_ids),
                 involved_topics=set(self.involved_topics),
+                involved_concepts=set(self.involved_concepts),
                 missed_topics=set(self.missed_topics),
                 answered_count=self.answered_count,
                 correct_count=self.correct_count,
                 activated_total=self.activated_total,
+                concept_answered=dict(self.concept_answered),
+                concept_correct=dict(self.concept_correct),
                 resume_index=resume_index,
             )
         )
