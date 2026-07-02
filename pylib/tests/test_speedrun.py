@@ -861,3 +861,168 @@ def test_compute_recap_score_empty_abstains_without_error():
     assert score.correct == 0
     assert score.overall == 0.0
     assert score.per_concept == []
+
+
+# Curriculum data/API layer (W4 — concept-structured navigation)
+##############################################################################
+
+
+def _curriculum_bank() -> list[dict]:
+    """Two glycolysis + one membrane-transport biology questions, and one
+    physics question — enough to exercise concept grouping and counts."""
+    base = _sample_bank()[0]
+    return [
+        {**base, "uid": "glyc-a", "topics": ["biology"], "concept": "glycolysis"},
+        {**base, "uid": "glyc-b", "topics": ["biology"], "concept": "glycolysis"},
+        {
+            **base,
+            "uid": "mem-a",
+            "topics": ["biology"],
+            "concept": "membrane-transport",
+        },
+        {
+            **base,
+            "uid": "phys-a",
+            "topics": ["physics"],
+            "concept": "work-energy",
+            "pool": "served",
+        },
+    ]
+
+
+def _answer(col, note_id, correct):
+    card = col.get_note(note_id).cards()[0]
+    card.start_timer()
+    col.sched.answerCard(card, 3 if correct else 1, from_queue=False)
+
+
+def test_curriculum_groups_concepts_with_counts_and_lessons():
+    col = getEmptyCol()
+    col.speedrun.setup_mcat()
+    col.speedrun.import_question_bank(questions=_curriculum_bank())
+    col.speedrun.import_first_principles(
+        cards=[
+            {
+                "uid": "fp-glyc",
+                "topic": "biology",
+                "concept": "glycolysis",
+                "front": "Net yield of glycolysis?",
+                "back": "Two ATP and two NADH per glucose.",
+            },
+            {
+                "uid": "fp-mem",
+                "topic": "biology",
+                "concept": "membrane-transport",
+                "front": "Passive vs active transport?",
+                "back": "Passive follows the gradient; active spends ATP.",
+            },
+        ]
+    )
+
+    curriculum = col.speedrun.curriculum()
+
+    # Every blueprint topic is surfaced (structure), even empty ones.
+    topic_names = {t.topic for t in curriculum.topics}
+    assert {"biology", "physics"} <= topic_names
+    assert len(curriculum.topics) == len(DEFAULT_MCAT_BLUEPRINT["topics"])
+
+    biology = next(t for t in curriculum.topics if t.topic == "biology")
+    # Concepts are grouped under their content topic, sorted by slug.
+    assert [c.concept for c in biology.concepts] == ["glycolysis", "membrane-transport"]
+    glyc = next(c for c in biology.concepts if c.concept == "glycolysis")
+    assert glyc.served_questions == 2
+    assert glyc.lesson_cards == 1
+    # Curated taxonomy label is used on desktop.
+    assert glyc.label == "Glycolysis & carbohydrate metabolism"
+    # Lesson cards import suspended -> not activated, not reviewed, not practised.
+    assert glyc.lessons_activated == 0 and glyc.lessons_reviewed == 0
+    assert not glyc.practiced
+
+    # A concept with no served questions is not invented; physics has work-energy.
+    physics = next(t for t in curriculum.topics if t.topic == "physics")
+    assert [c.concept for c in physics.concepts] == ["work-energy"]
+    assert physics.concepts[0].lesson_cards == 0
+
+
+def test_curriculum_progress_reads_revlog_and_activation():
+    col = getEmptyCol()
+    col.speedrun.setup_mcat()
+    col.speedrun.import_question_bank(questions=_curriculum_bank())
+    col.speedrun.import_first_principles(
+        cards=[
+            {
+                "uid": "fp-glyc",
+                "topic": "biology",
+                "concept": "glycolysis",
+                "front": "Net yield of glycolysis?",
+                "back": "Two ATP and two NADH per glucose.",
+            }
+        ]
+    )
+    by_uid = _bank_uid_index(col)
+
+    # Answer one glycolysis question right, one wrong -> 1/2 = 50% accuracy.
+    _answer(col, by_uid["glyc-a"], correct=True)
+    _answer(col, by_uid["glyc-b"], correct=False)
+    # A qualifying miss activates the linked glycolysis lesson card.
+    col.speedrun.record_miss_reason(by_uid["glyc-b"], MissReason.KNOWLEDGE_GAP)
+
+    glyc = col.speedrun.curriculum().concept("glycolysis")
+    assert glyc is not None
+    assert glyc.answered == 2
+    assert glyc.correct == 1
+    assert glyc.accuracy == 0.5
+    assert glyc.practiced
+    # The gated miss unsuspended the glycolysis lesson card.
+    assert glyc.lessons_activated == 1
+
+
+def test_weak_concepts_prioritises_unpractised_then_low_accuracy():
+    col = getEmptyCol()
+    col.speedrun.setup_mcat()
+    col.speedrun.import_question_bank(questions=_curriculum_bank())
+    by_uid = _bank_uid_index(col)
+
+    # glycolysis: practised but weak (1/2). membrane-transport: never practised.
+    # work-energy (physics): practised and solid (correct).
+    _answer(col, by_uid["glyc-a"], correct=True)
+    _answer(col, by_uid["glyc-b"], correct=False)
+    _answer(col, by_uid["phys-a"], correct=True)
+
+    weak = col.speedrun.weak_concepts()
+    # Never-practised concept comes first, then the low-accuracy one; the solid
+    # concept is not weak and is excluded.
+    assert weak[0] == "membrane-transport"
+    assert "glycolysis" in weak
+    assert "work-energy" not in weak
+
+
+def test_curriculum_to_dict_is_json_shaped():
+    col = getEmptyCol()
+    col.speedrun.setup_mcat()
+    col.speedrun.import_question_bank(questions=_curriculum_bank())
+
+    data = col.speedrun.curriculum().to_dict()
+    assert set(data) == {"topics", "overallMastery", "masteryAbstained"}
+    biology = next(t for t in data["topics"] if t["topic"] == "biology")
+    assert set(biology) >= {
+        "topic",
+        "label",
+        "weight",
+        "mastery",
+        "masteryKnown",
+        "concepts",
+        "servedQuestions",
+    }
+    concept = biology["concepts"][0]
+    assert set(concept) >= {
+        "concept",
+        "label",
+        "topic",
+        "servedQuestions",
+        "lessonCards",
+        "answered",
+        "correct",
+        "accuracy",
+        "practiced",
+    }

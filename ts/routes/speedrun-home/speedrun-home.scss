@@ -153,6 +153,178 @@
         }
     }
 
+    .curriculum {
+        width: 100%;
+
+        .curriculum-head {
+            margin-bottom: 12px;
+
+            h2 {
+                margin: 0;
+                font-size: 18px;
+            }
+
+            .hint {
+                margin: 4px 0 0;
+                font-size: 13px;
+                color: var(--fg-subtle);
+            }
+        }
+
+        .empty {
+            color: var(--fg-subtle);
+            font-size: 14px;
+        }
+
+        .topic-list,
+        .concept-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .topic-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .topic {
+            background: var(--canvas-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 12px 14px;
+        }
+
+        .topic-head {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+
+            .topic-toggle {
+                flex: 1;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                background: none;
+                border: none;
+                padding: 0;
+                cursor: pointer;
+                color: var(--fg);
+                text-align: left;
+
+                .chevron {
+                    transition: transform 0.12s ease;
+                    font-size: 18px;
+                    color: var(--fg-subtle);
+
+                    &.open {
+                        transform: rotate(90deg);
+                    }
+                }
+
+                .topic-name {
+                    font-size: 16px;
+                    font-weight: 700;
+                    text-transform: capitalize;
+                }
+            }
+
+            .topic-mastery {
+                font-size: 14px;
+                font-weight: 700;
+                color: var(--fg-subtle);
+            }
+        }
+
+        .chip-btn {
+            flex: none;
+            border: 1px solid var(--border);
+            background: var(--canvas);
+            color: var(--fg-link);
+            border-radius: 8px;
+            padding: 4px 10px;
+            font-size: 13px;
+            cursor: pointer;
+
+            &:hover {
+                filter: brightness(1.05);
+                border-color: var(--fg-link);
+            }
+        }
+
+        .topic-bar {
+            margin: 10px 0 6px;
+            height: 6px;
+            border-radius: 4px;
+            background: var(--canvas-inset, rgba(128, 128, 128, 0.25));
+            overflow: hidden;
+
+            .topic-bar-fill {
+                height: 100%;
+                background: linear-gradient(90deg, hsl(210, 90%, 52%), hsl(150, 65%, 45%));
+
+                &.unknown {
+                    background: transparent;
+                }
+            }
+        }
+
+        .topic-meta {
+            font-size: 12px;
+            color: var(--fg-subtle);
+        }
+
+        .concept-list {
+            margin-top: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            border-top: 1px solid var(--border-subtle);
+            padding-top: 10px;
+        }
+
+        .concept {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            grid-template-areas:
+                "info study"
+                "meta study";
+            align-items: center;
+            gap: 2px 10px;
+
+            .concept-info {
+                grid-area: info;
+                display: flex;
+                align-items: baseline;
+                gap: 8px;
+
+                .concept-name {
+                    font-weight: 600;
+                }
+
+                .concept-state {
+                    font-size: 12px;
+                    color: var(--fg-subtle);
+
+                    &.done {
+                        color: hsl(150, 55%, 42%);
+                    }
+                }
+            }
+
+            .concept-meta {
+                grid-area: meta;
+                font-size: 12px;
+                color: var(--fg-subtle);
+            }
+
+            .concept-study {
+                grid-area: study;
+            }
+        }
+    }
+
     .links {
         display: flex;
         align-items: center;

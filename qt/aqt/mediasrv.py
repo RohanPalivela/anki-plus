@@ -697,6 +697,62 @@ def deck_options_ready() -> bytes:
     return b""
 
 
+def speedrun_curriculum() -> bytes:
+    """Return the concept-structured Speedrun curriculum as JSON.
+
+    Fork-specific (W4): powers the shared ``speedrun-home`` curriculum view. The
+    stats are computed in pylib (``Speedrun.curriculum``) from already-synced
+    data, so this is a plain read. JSON (not protobuf) keeps the curriculum
+    layer entirely in Python/Kotlin without a new engine RPC; Android serves the
+    byte-identical shape from ``collectionMethods["speedrunCurriculum"]``.
+    """
+    import json
+
+    data = aqt.mw.col.speedrun.curriculum().to_dict()
+    return json.dumps(data).encode("utf-8")
+
+
+def speedrun_set_scope() -> bytes:
+    """Persist the curriculum scope for the NEXT guided session (or clear it).
+
+    Accepts a JSON body ``{"topic": str|null, "concept": str|null}``; an empty
+    object clears the scope (top-level smart Start). Values are validated against
+    the collection's own content so an unknown slug can never be stored. Mirrors
+    Android's ``speedrunSetScope``; the session controller consumes and clears
+    the key on Start.
+    """
+    import json
+
+    from anki.speedrun import SESSION_SCOPE_CONFIG_KEY
+
+    try:
+        payload = json.loads(request.data or b"{}")
+    except ValueError:
+        payload = {}
+    topic = payload.get("topic") or None
+    concept = payload.get("concept") or None
+    if not topic and not concept:
+        aqt.mw.col.remove_config(SESSION_SCOPE_CONFIG_KEY)
+        return b""
+    # Validate against real content so a stray value can't strand the session.
+    curriculum = aqt.mw.col.speedrun.curriculum()
+    valid_topics = {t.topic for t in curriculum.topics}
+    valid_concepts = {c.concept for t in curriculum.topics for c in t.concepts}
+    scope: dict[str, str] = {}
+    if concept and concept in valid_concepts:
+        scope["concept"] = concept
+        matched = curriculum.concept(concept)
+        if matched is not None:
+            scope["topic"] = matched.topic
+    elif topic and topic in valid_topics:
+        scope["topic"] = topic
+    if scope:
+        aqt.mw.col.set_config(SESSION_SCOPE_CONFIG_KEY, scope)
+    else:
+        aqt.mw.col.remove_config(SESSION_SCOPE_CONFIG_KEY)
+    return b""
+
+
 def save_custom_colours() -> bytes:
     colors = [
         QColorDialog.customColor(i).name(QColor.NameFormat.HexRgb)
@@ -722,6 +778,8 @@ post_handler_list = [
     deck_options_require_close,
     deck_options_ready,
     save_custom_colours,
+    speedrun_curriculum,
+    speedrun_set_scope,
 ]
 
 
@@ -840,6 +898,11 @@ def _check_dynamic_request_permissions():
         # API access; its read-only Memory snapshot must be whitelisted like
         # congratsInfo so the home can load without the Bearer token.
         "/_anki/getMemoryScore",
+        # Curriculum view (read) + the small scope-for-next-session write; both
+        # are fork-internal and the scope write validates its input against the
+        # collection's own content (see speedrun_set_scope).
+        "/_anki/speedrunCurriculum",
+        "/_anki/speedrunSetScope",
     ):
         pass
     else:

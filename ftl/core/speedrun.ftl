@@ -137,6 +137,24 @@ speedrun-home-open-decks = Decks (standard Anki)
 speedrun-home-link = Home
 speedrun-home-link-tip = MCAT Anki-Plus home
 
+## Tier 2 — curriculum (topic → concept navigation).
+
+speedrun-home-curriculum-title = Your curriculum
+speedrun-home-curriculum-hint =
+    Pick a topic or concept to focus on, or press Start for a smart mix that
+    targets your weak spots.
+speedrun-home-curriculum-empty =
+    Import the question bank to build your curriculum.
+speedrun-curriculum-mastery = Mastery
+speedrun-curriculum-mastery-unknown = No data yet
+speedrun-curriculum-questions = { $count } questions
+speedrun-curriculum-lessons = { $count } lessons
+speedrun-curriculum-accuracy = { $percent }% accurate
+speedrun-curriculum-not-started = Not started
+speedrun-curriculum-study = Study
+speedrun-curriculum-study-topic = Study topic
+speedrun-curriculum-lessons-active = { $activated }/{ $total } lessons active
+
 ## Tier 2 — guided session (fixed Practice → Flashcards → Recap sequence).
 
 speedrun-session-practice-title = Practice questions

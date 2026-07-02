@@ -7,9 +7,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import * as tr from "@generated/ftl";
     import { bridgeCommand } from "@tslib/bridgecommand";
 
+    import type { ConceptProgress, Curriculum, TopicProgress } from "./curriculum";
+    import { setSessionScope } from "./curriculum";
+
     import "./speedrun-home.scss";
 
     export let score: MemoryScoreResponse;
+    export let curriculum: Curriculum | null = null;
 
     function pct(value: number): string {
         return `${Math.round(value * 100)}%`;
@@ -19,15 +23,44 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     // unreliable, so show placeholders instead of misleading numbers. The raw
     // graded-card count stays, as honest progress toward a real score.
     $: showScore = !score.abstained;
+    $: topics = curriculum?.topics ?? [];
+    $: hasCurriculum = topics.length > 0;
 
-    function start(): void {
+    // The set of topics whose concept list is expanded (collapsed by default so
+    // the overview stays scannable). Keyed by topic slug.
+    let expanded: Record<string, boolean> = {};
+    function toggle(topic: string): void {
+        expanded = { ...expanded, [topic]: !expanded[topic] };
+    }
+
+    // Every Start writes the scope first (null clears it), then hands off to the
+    // native guided session, so desktop and Android use one identical path.
+    async function startScoped(
+        topic: string | null,
+        concept: string | null,
+    ): Promise<void> {
+        await setSessionScope(topic, concept);
         bridgeCommand("start");
+    }
+    function start(): void {
+        startScoped(null, null);
     }
     function openDashboard(): void {
         bridgeCommand("dashboard");
     }
     function openDecks(): void {
         bridgeCommand("decks");
+    }
+
+    function conceptState(c: ConceptProgress): string {
+        if (!c.practiced) {
+            return tr.speedrunCurriculumNotStarted();
+        }
+        return tr.speedrunCurriculumAccuracy({ percent: Math.round(c.accuracy * 100) });
+    }
+
+    function masteryLabel(t: TopicProgress): string {
+        return t.masteryKnown ? pct(t.mastery) : tr.speedrunCurriculumMasteryUnknown();
     }
 </script>
 
@@ -77,6 +110,92 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         <span class="start-label">{tr.speedrunHomeStart()}</span>
         <span class="start-sub">{tr.speedrunHomeStartHint()}</span>
     </button>
+
+    <section class="curriculum">
+        <div class="curriculum-head">
+            <h2>{tr.speedrunHomeCurriculumTitle()}</h2>
+            <p class="hint">{tr.speedrunHomeCurriculumHint()}</p>
+        </div>
+
+        {#if !hasCurriculum}
+            <p class="empty">{tr.speedrunHomeCurriculumEmpty()}</p>
+        {:else}
+            <ul class="topic-list">
+                {#each topics as topic (topic.topic)}
+                    <li class="topic">
+                        <div class="topic-head">
+                            <button
+                                class="topic-toggle"
+                                on:click={() => toggle(topic.topic)}
+                                aria-expanded={!!expanded[topic.topic]}
+                            >
+                                <span class="chevron" class:open={expanded[topic.topic]}>
+                                    ›
+                                </span>
+                                <span class="topic-name">{topic.label}</span>
+                            </button>
+                            <span class="topic-mastery" title={tr.speedrunCurriculumMastery()}>
+                                {masteryLabel(topic)}
+                            </span>
+                            <button
+                                class="chip-btn"
+                                on:click={() => startScoped(topic.topic, null)}
+                            >
+                                {tr.speedrunCurriculumStudyTopic()}
+                            </button>
+                        </div>
+                        <div class="topic-bar" aria-hidden="true">
+                            <div
+                                class="topic-bar-fill"
+                                class:unknown={!topic.masteryKnown}
+                                style={`width: ${topic.masteryKnown ? Math.round(topic.mastery * 100) : 0}%`}
+                            ></div>
+                        </div>
+                        <div class="topic-meta">
+                            {tr.speedrunCurriculumQuestions({ count: topic.servedQuestions })}
+                            · {tr.speedrunCurriculumLessons({ count: topic.lessonCards })}
+                        </div>
+
+                        {#if expanded[topic.topic]}
+                            <ul class="concept-list">
+                                {#each topic.concepts as concept (concept.concept)}
+                                    <li class="concept">
+                                        <div class="concept-info">
+                                            <span class="concept-name">{concept.label}</span>
+                                            <span
+                                                class="concept-state"
+                                                class:done={concept.practiced}
+                                            >
+                                                {conceptState(concept)}
+                                            </span>
+                                        </div>
+                                        <div class="concept-meta">
+                                            {tr.speedrunCurriculumQuestions({
+                                                count: concept.servedQuestions,
+                                            })}
+                                            {#if concept.lessonCards > 0}
+                                                · {tr.speedrunCurriculumLessonsActive({
+                                                    activated: String(concept.lessonsActivated),
+                                                    total: concept.lessonCards,
+                                                })}
+                                            {/if}
+                                        </div>
+                                        <button
+                                            class="chip-btn concept-study"
+                                            on:click={() =>
+                                                startScoped(concept.topic, concept.concept)}
+                                        >
+                                            {tr.speedrunCurriculumStudy()}
+                                        </button>
+                                    </li>
+                                {/each}
+                            </ul>
+                        {/if}
+                    </li>
+                {/each}
+            </ul>
+        {/if}
+    </section>
 
     <nav class="links">
         <button class="link" on:click={openDashboard}>

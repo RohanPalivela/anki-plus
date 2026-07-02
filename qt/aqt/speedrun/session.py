@@ -40,6 +40,7 @@ from anki.decks import DeckId
 from anki.notes import NoteId
 from anki.speedrun import (
     FLASHCARDS_DECK_NAME,
+    SESSION_SCOPE_CONFIG_KEY,
     SESSION_STATE_CONFIG_KEY,
     RecapScore,
     compute_recap_score,
@@ -70,9 +71,24 @@ _STATE_KEY = SESSION_STATE_CONFIG_KEY
 class SpeedrunSession:
     """Drives the fixed Practice → Flashcards → Recap → Home sequence."""
 
-    def __init__(self, mw: aqt.main.AnkiQt, *, state: dict | None = None) -> None:
+    def __init__(
+        self,
+        mw: aqt.main.AnkiQt,
+        *,
+        state: dict | None = None,
+        scope_topic: str | None = None,
+        scope_concept: str | None = None,
+    ) -> None:
         self.mw = mw
         self.caps = mw.col.speedrun.session_caps()
+
+        # Optional curriculum scope: a chosen topic and/or concept restricts
+        # Practice (and, transitively via practised concepts, Recap) to that
+        # material. Persisted in the session state so a paused scoped session
+        # resumes scoped. When both are None this is the top-level smart Start,
+        # which targets weak/under-covered concepts (see ``_enter_phase1``).
+        self.scope_topic = scope_topic
+        self.scope_concept = scope_concept
 
         # 0 = idle/fresh, 1/2/3 = current phase.
         self._phase = 0
@@ -120,6 +136,10 @@ class SpeedrunSession:
 
     def _load_state(self, state: dict) -> None:
         self._phase = int(state.get("phase", 0))
+        # A persisted scope wins over a freshly requested one so a resumed
+        # session keeps the scope it was started with.
+        self.scope_topic = state.get("scope_topic") or self.scope_topic
+        self.scope_concept = state.get("scope_concept") or self.scope_concept
         self.practice_ids = [NoteId(x) for x in state.get("practice_ids", [])]
         self.practice_index = int(state.get("practice_index", 0))
         self.recap_ids = [NoteId(x) for x in state.get("recap_ids", [])]
@@ -149,6 +169,8 @@ class SpeedrunSession:
             _STATE_KEY,
             {
                 "phase": self._phase,
+                "scope_topic": self.scope_topic,
+                "scope_concept": self.scope_concept,
                 "practice_ids": [int(x) for x in self.practice_ids],
                 "practice_index": self.practice_index,
                 "recap_ids": [int(x) for x in self.recap_ids],
@@ -266,14 +288,7 @@ class SpeedrunSession:
     def _enter_phase1(self) -> None:
         self._phase = 1
         if not self.practice_ids:
-            # Prefer never-practised questions so a fresh session doesn't
-            # replay the same leading batch each time; only fall back to
-            # previously-seen ones (oldest first) once the pool is exhausted.
-            self.practice_ids = list(
-                self.mw.col.speedrun.served_questions_interleaved(unseen_first=True)[
-                    : self.caps.practice
-                ]
-            )
+            self.practice_ids = self._build_practice_ids()
             self.practice_index = 0
         if not self.practice_ids or self.practice_index >= len(self.practice_ids):
             self._goto(self._phase2)
@@ -286,6 +301,45 @@ class SpeedrunSession:
             on_finish=self._on_phase1_finish,
             start_index=self.practice_index,
         )
+
+    def _build_practice_ids(self) -> list[NoteId]:
+        """The (capped) Phase-1 question list, honouring any curriculum scope.
+
+        * Concept-scoped: that concept's served questions, falling back to the
+          topic when the concept is too sparse to fill the batch.
+        * Topic-scoped: that topic's served questions.
+        * Unscoped (top-level Start): bias toward weak/under-covered concepts
+          (with a concept-less topic fallback), and if nothing qualifies just
+          serve the whole pool. ``unseen_first`` keeps a fresh batch each run.
+        """
+        speedrun = self.mw.col.speedrun
+        cap = self.caps.practice
+        if self.scope_concept:
+            topics = {self.scope_topic} if self.scope_topic else None
+            ids = speedrun.served_questions_interleaved(
+                topics=topics, concepts={self.scope_concept}, unseen_first=True
+            )
+            if not ids and self.scope_topic:
+                # Concept too sparse: fall back to the whole topic.
+                ids = speedrun.served_questions_interleaved(
+                    topics={self.scope_topic}, unseen_first=True
+                )
+            return list(ids[:cap])
+        if self.scope_topic:
+            return list(
+                speedrun.served_questions_interleaved(
+                    topics={self.scope_topic}, unseen_first=True
+                )[:cap]
+            )
+        # Unscoped smart Start: target weak/under-covered concepts first.
+        weak = set(speedrun.weak_concepts())
+        if weak:
+            ids = speedrun.served_questions_interleaved(
+                concepts=weak, unseen_first=True
+            )
+            if ids:
+                return list(ids[:cap])
+        return list(speedrun.served_questions_interleaved(unseen_first=True)[:cap])
 
     def _on_phase1_finish(self, result: StudyPhaseResult) -> None:
         self._dialog = None
@@ -325,8 +379,17 @@ class SpeedrunSession:
     def _maybe_run_coverage_sweep(self) -> None:
         """Run the coverage sweep exactly once per session (idempotent on
         resume). Uses the configured default sample size and folds the count
-        into the session tally so the summary reflects it."""
+        into the session tally so the summary reflects it.
+
+        Skipped for a scoped (topic/concept) session: the sweep re-activates a
+        spread across ALL blueprint topics, which would pull unrelated cards
+        into a focused concept session's flashcard phase. In a scoped session
+        the concept's own cards were already activated by the Phase-1 misses.
+        """
         if self._swept:
+            return
+        if self.scope_topic or self.scope_concept:
+            self._swept = True
             return
         try:
             resp = self.mw.col.speedrun.run_coverage_sweep()
@@ -567,4 +630,16 @@ def start_session(mw: aqt.main.AnkiQt) -> None:
     if not mw.col or not ensure_bank_imported(mw):
         return
     state = mw.col.get_config(_STATE_KEY, None)
-    SpeedrunSession(mw, state=state).start()
+    # A pending curriculum scope only applies to a FRESH session; a paused
+    # session always resumes with the scope it was started with. Consume (clear)
+    # the pending scope either way so it never lingers onto a later Start.
+    scope = mw.col.get_config(SESSION_SCOPE_CONFIG_KEY, None)
+    if scope is not None:
+        mw.col.remove_config(SESSION_SCOPE_CONFIG_KEY)
+    scope_topic = scope_concept = None
+    if state is None and isinstance(scope, dict):
+        scope_topic = scope.get("topic") or None
+        scope_concept = scope.get("concept") or None
+    SpeedrunSession(
+        mw, state=state, scope_topic=scope_topic, scope_concept=scope_concept
+    ).start()

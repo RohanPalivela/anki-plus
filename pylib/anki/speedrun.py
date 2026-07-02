@@ -40,6 +40,7 @@ from typing import TYPE_CHECKING, Any
 import anki
 import anki.collection
 from anki import speedrun_pb2
+from anki.consts import QUEUE_TYPE_SUSPENDED
 from anki.notes import Note, NoteId
 
 if TYPE_CHECKING:
@@ -206,6 +207,30 @@ def concepts_for_topic(topic: str, path: str | Path | None = None) -> list[str]:
     return [c["id"] for c in data.get("concepts", []) if c.get("topic") == topic]
 
 
+def concept_labels(path: str | Path | None = None) -> dict[str, str]:
+    """Map each taxonomy concept slug to its human-readable label.
+
+    Used by the curriculum layer to give desktop nice curated labels; Android
+    (which does not ship the taxonomy JSON) humanises the slug instead. Only the
+    *label* differs between clients — every curriculum stat and the concept /
+    topic grouping are computed identically from synced data, so parity holds.
+    """
+    return {
+        c["id"]: c.get("label", c["id"])
+        for c in load_concepts(path).get("concepts", [])
+    }
+
+
+def humanize_slug(slug: str) -> str:
+    """Fallback label for a kebab-case slug (``amino-acids`` -> ``Amino acids``).
+
+    Deliberately matches Android's ``Speedrun.humanizeSlug`` so a concept with no
+    curated taxonomy label reads the same on both clients.
+    """
+    words = slug.replace("-", " ").strip()
+    return words[:1].upper() + words[1:] if words else words
+
+
 # Config keys (must match rslib/src/speedrun/blueprint.rs + config/bool.rs).
 BLUEPRINT_CONFIG_KEY = "speedrunBlueprint"
 SWEEP_SAMPLE_SIZE_CONFIG_KEY = "speedrunSweepSampleSize"
@@ -214,6 +239,13 @@ ORDERING_CONFIG_KEY = "speedrunOrdering"
 #: Defined here so both the session controller and :meth:`Speedrun.reset_profile`
 #: refer to the same key.
 SESSION_STATE_CONFIG_KEY = "speedrunSessionState"
+#: Requested scope for the NEXT fresh guided session, set by the curriculum home
+#: when the student taps a topic/concept and consumed (then cleared) by the
+#: session controller. Shape: ``{"topic": str|None, "concept": str|None}``; an
+#: absent/empty value means the top-level smart Start (targets weak concepts).
+#: Mirrored across clients so a concept tapped on either device scopes the same
+#: session; kept transient (never resumes) so it can't strand a stale scope.
+SESSION_SCOPE_CONFIG_KEY = "speedrunSessionScope"
 #: Set once :meth:`Speedrun.link_gated_first_principles` has stamped precise
 #: ``gates::`` links onto a collection's served questions, so the study/session
 #: entry points can back-fill legacy collections exactly once instead of
@@ -539,6 +571,139 @@ def compute_recap_score(
         overall=overall,
         per_concept=per_concept,
     )
+
+
+# Curriculum data/API layer (W4 — concept-structured navigation) --------------
+#
+# The curriculum turns the flat "start -> random questions -> flashcards ->
+# recap" pool into a navigable **topic -> concept** structure so the student
+# sees where they are weak instead of an opaque bag of questions. It is built
+# ONCE here (and mirrored in Android's ``Speedrun.kt``) entirely from data that
+# already syncs — no new notetype, deck, or persisted schema:
+#
+# * topics + weights come from the ``speedrunBlueprint`` collection config;
+# * a concept belongs to a topic purely by content: the ``topic::`` /
+#   ``concept::`` tags co-occurring on served questions and first-principles
+#   cards (so both clients derive identical membership offline);
+# * per-concept progress is read from card state (reps / suspension) and the
+#   ``revlog`` (answered / correct on the concept's served-question cards);
+# * per-topic mastery reuses the existing ``get_memory_score`` FSRS RPC.
+#
+# Concepts with neither a served question nor a lesson card are omitted (both
+# clients can only see content that synced in). The recap SCORE stays hidden by
+# design; curriculum progress/mastery is what we surface.
+
+#: Ease values >= this are treated as a correct answer in the revlog. The study
+#: loop grades Good(3)=correct / Again(1)=incorrect, so 2 is the natural cutoff.
+_CORRECT_EASE_CUTOFF = 2
+
+
+@dataclass
+class ConceptProgress:
+    """Per-concept curriculum stats (all derived from synced data)."""
+
+    concept: str
+    label: str
+    topic: str
+    #: Served practice questions tagged with this concept.
+    served_questions: int
+    #: First-principles lesson cards tagged with this concept.
+    lesson_cards: int
+    #: Revlog answers recorded on this concept's served-question cards.
+    answered: int
+    #: Of those answers, how many were correct (ease >= cutoff).
+    correct: int
+    #: Lesson cards currently unsuspended (activated by a related miss/sweep).
+    lessons_activated: int
+    #: Lesson cards that have at least one review (FSRS mastery is building).
+    lessons_reviewed: int
+
+    @property
+    def accuracy(self) -> float:
+        """Fraction of recorded answers that were correct; 0.0 when none."""
+        return self.correct / self.answered if self.answered else 0.0
+
+    @property
+    def practiced(self) -> bool:
+        """True once the student has answered any of this concept's questions."""
+        return self.answered > 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "concept": self.concept,
+            "label": self.label,
+            "topic": self.topic,
+            "servedQuestions": self.served_questions,
+            "lessonCards": self.lesson_cards,
+            "answered": self.answered,
+            "correct": self.correct,
+            "lessonsActivated": self.lessons_activated,
+            "lessonsReviewed": self.lessons_reviewed,
+            "accuracy": self.accuracy,
+            "practiced": self.practiced,
+        }
+
+
+@dataclass
+class TopicProgress:
+    """A blueprint topic plus its concepts and aggregate progress."""
+
+    topic: str
+    label: str
+    weight: float
+    #: FSRS mastery point estimate from ``get_memory_score`` (0.0 if unknown).
+    mastery: float
+    #: False when the Memory model has no activated-card data for this topic.
+    mastery_known: bool
+    concepts: list[ConceptProgress]
+    served_questions: int
+    lesson_cards: int
+    answered: int
+    correct: int
+
+    @property
+    def accuracy(self) -> float:
+        return self.correct / self.answered if self.answered else 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "topic": self.topic,
+            "label": self.label,
+            "weight": self.weight,
+            "mastery": self.mastery,
+            "masteryKnown": self.mastery_known,
+            "servedQuestions": self.served_questions,
+            "lessonCards": self.lesson_cards,
+            "answered": self.answered,
+            "correct": self.correct,
+            "accuracy": self.accuracy,
+            "concepts": [c.to_dict() for c in self.concepts],
+        }
+
+
+@dataclass
+class Curriculum:
+    """The full topic -> concept curriculum with progress and mastery."""
+
+    topics: list[TopicProgress]
+    #: Overall FSRS mastery point estimate from ``get_memory_score``.
+    overall_mastery: float
+    #: True when the Memory model abstains (too little graded data).
+    mastery_abstained: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "topics": [t.to_dict() for t in self.topics],
+            "overallMastery": self.overall_mastery,
+            "masteryAbstained": self.mastery_abstained,
+        }
+
+    def concept(self, slug: str) -> ConceptProgress | None:
+        for topic in self.topics:
+            for concept in topic.concepts:
+                if concept.concept == slug:
+                    return concept
+        return None
 
 
 class Speedrun:
@@ -944,6 +1109,9 @@ class Speedrun:
         if self.col.get_config(SESSION_STATE_CONFIG_KEY, None) is not None:
             self.col.remove_config(SESSION_STATE_CONFIG_KEY)
             summary.session_cleared = True
+        # Also drop any pending curriculum scope so a fresh Start is unscoped.
+        if self.col.get_config(SESSION_SCOPE_CONFIG_KEY, None) is not None:
+            self.col.remove_config(SESSION_SCOPE_CONFIG_KEY)
 
         # 2. Gather the memory cards and how much progress they carry (measured
         #    before mutating, so the reported counts are meaningful).
@@ -1177,3 +1345,194 @@ class Speedrun:
             ),
             recap=cap(SESSION_RECAP_CAP_CONFIG_KEY, DEFAULT_SESSION_RECAP_CAP),
         )
+
+    # Curriculum data/API layer (W4)
+    ##########################################################################
+
+    def curriculum(self) -> Curriculum:
+        """Build the topic -> concept curriculum with per-concept progress.
+
+        Pure read: scans served questions + first-principles cards for their
+        ``topic::`` / ``concept::`` tags, reads answered/correct from the
+        ``revlog`` and lesson activation/review from card state, and folds in the
+        per-topic FSRS mastery from :meth:`get_memory_score`. See the module
+        note above for the design; mirrored byte-for-byte in Android's
+        ``Speedrun.curriculum``.
+        """
+        labels = self._concept_labels_safe()
+
+        # (topic, concept) -> served question count, and card id -> concept for
+        # the single revlog query below. A concept is assigned the topic it
+        # co-occurs with on content (derived identically on both clients).
+        served_counts: dict[tuple[str, str], int] = {}
+        concept_topic: dict[str, str] = {}
+        card_concept: dict[int, str] = {}
+        for nid in self.served_question_note_ids():
+            note = self.col.get_note(nid)
+            topic = topic_of_note(note) or ""
+            concept = concept_of_note(note)
+            if concept is None:
+                continue
+            self._assign_concept_topic(concept_topic, concept, topic)
+            key = (topic, concept)
+            served_counts[key] = served_counts.get(key, 0) + 1
+            for card in note.cards():
+                card_concept[int(card.id)] = concept
+
+        # Lesson (first-principles) cards per concept, with activation/review.
+        lesson_cards: dict[str, int] = {}
+        lessons_activated: dict[str, int] = {}
+        lessons_reviewed: dict[str, int] = {}
+        for nid in self.col.find_notes(f"tag:{FIRST_PRINCIPLES_TAG}"):
+            note = self.col.get_note(nid)
+            concept = concept_of_note(note)
+            if concept is None:
+                continue
+            topic = topic_of_note(note) or ""
+            self._assign_concept_topic(concept_topic, concept, topic)
+            for card in note.cards():
+                lesson_cards[concept] = lesson_cards.get(concept, 0) + 1
+                if card.queue != QUEUE_TYPE_SUSPENDED:
+                    lessons_activated[concept] = lessons_activated.get(concept, 0) + 1
+                if card.reps > 0:
+                    lessons_reviewed[concept] = lessons_reviewed.get(concept, 0) + 1
+
+        answered, correct = self._revlog_by_concept(card_concept)
+
+        # Group concepts under their assigned topic.
+        by_topic: dict[str, list[ConceptProgress]] = {}
+        for concept, topic in concept_topic.items():
+            served = served_counts.get((topic, concept), 0)
+            # A concept may carry served questions under one topic tag but the
+            # lesson card under another; served count keyed by (topic, concept)
+            # handles the common case, and lesson counts are per-concept.
+            if served == 0:
+                served = sum(
+                    count for (t, c), count in served_counts.items() if c == concept
+                )
+            cp = ConceptProgress(
+                concept=concept,
+                label=labels.get(concept) or humanize_slug(concept),
+                topic=topic,
+                served_questions=served,
+                lesson_cards=lesson_cards.get(concept, 0),
+                answered=answered.get(concept, 0),
+                correct=correct.get(concept, 0),
+                lessons_activated=lessons_activated.get(concept, 0),
+                lessons_reviewed=lessons_reviewed.get(concept, 0),
+            )
+            by_topic.setdefault(topic, []).append(cp)
+
+        memory = self.get_memory_score()
+        topic_mastery = {t.topic: (t.mastery, t.known) for t in memory.topics}
+
+        # Order: blueprint topics first (by descending weight, then name), then
+        # any content-only topics; concepts sorted by slug for identical order
+        # on both clients.
+        blueprint = self.col.get_config(BLUEPRINT_CONFIG_KEY) or DEFAULT_MCAT_BLUEPRINT
+        weights = {
+            t["name"]: float(t.get("weight", 0.0)) for t in blueprint.get("topics", [])
+        }
+        ordered_topics = sorted(weights, key=lambda t: (-weights[t], t))
+        for extra in sorted(by_topic):
+            if extra not in weights:
+                ordered_topics.append(extra)
+
+        topics: list[TopicProgress] = []
+        for topic in ordered_topics:
+            concepts = sorted(by_topic.get(topic, []), key=lambda c: c.concept)
+            if not concepts and topic not in weights:
+                continue
+            mastery, known = topic_mastery.get(topic, (0.0, False))
+            topics.append(
+                TopicProgress(
+                    topic=topic,
+                    label=humanize_slug(topic),
+                    weight=weights.get(topic, 0.0),
+                    mastery=float(mastery),
+                    mastery_known=bool(known),
+                    concepts=concepts,
+                    served_questions=sum(c.served_questions for c in concepts),
+                    lesson_cards=sum(c.lesson_cards for c in concepts),
+                    answered=sum(c.answered for c in concepts),
+                    correct=sum(c.correct for c in concepts),
+                )
+            )
+
+        return Curriculum(
+            topics=topics,
+            overall_mastery=float(memory.overall),
+            mastery_abstained=bool(memory.abstained),
+        )
+
+    @staticmethod
+    def _assign_concept_topic(
+        concept_topic: dict[str, str], concept: str, topic: str
+    ) -> None:
+        """Assign ``concept`` to ``topic`` deterministically (lexicographically
+        smallest topic wins if a concept appears under several), so both clients
+        group identically regardless of scan order."""
+        existing = concept_topic.get(concept)
+        if existing is None or topic < existing:
+            concept_topic[concept] = topic
+
+    def _revlog_by_concept(
+        self, card_concept: dict[int, str]
+    ) -> tuple[dict[str, int], dict[str, int]]:
+        """Answered / correct tallies per concept from the served-question
+        cards' revlog (one query). Correct == ease >= the study-loop cutoff."""
+        answered: dict[str, int] = {}
+        correct: dict[str, int] = {}
+        if not card_concept:
+            return answered, correct
+        ids = ",".join(str(cid) for cid in card_concept)
+        for cid, ease in self.col.db.all(
+            f"select cid, ease from revlog where cid in ({ids})"
+        ):
+            concept = card_concept.get(int(cid))
+            if concept is None:
+                continue
+            answered[concept] = answered.get(concept, 0) + 1
+            if int(ease) >= _CORRECT_EASE_CUTOFF:
+                correct[concept] = correct.get(concept, 0) + 1
+        return answered, correct
+
+    def _concept_labels_safe(self) -> dict[str, str]:
+        """Curated taxonomy labels, or an empty map if the taxonomy is missing
+        (Android has none; it falls back to :func:`humanize_slug`)."""
+        try:
+            return concept_labels()
+        except (FileNotFoundError, ValueError):
+            return {}
+
+    #: A concept at/above this accuracy is considered solid enough to not be
+    #: prioritised by the smart Start (it can still be studied on request).
+    WEAK_ACCURACY_THRESHOLD = 0.8
+
+    def weak_concepts(self, limit: int = 0) -> list[str]:
+        """Concept slugs the top-level Start should target first: under-covered
+        or low-accuracy concepts that actually have questions to serve.
+
+        A concept counts as weak/under-covered when it has not been practised,
+        or its accuracy is below :data:`WEAK_ACCURACY_THRESHOLD`, or it has
+        activatable lesson cards that have never been reviewed. Ordered
+        weakest-first by ``(practised, accuracy, answered, slug)`` so a fresh,
+        unscoped session targets the student's weak material instead of a purely
+        random pool. ``limit`` of 0 returns all matches, ordered. Kept as a pure
+        read for parity with Android's ``Speedrun.weakConcepts``.
+        """
+        weak: list[ConceptProgress] = []
+        for topic in self.curriculum().topics:
+            for c in topic.concepts:
+                if c.served_questions == 0:
+                    continue
+                under_reviewed = c.lesson_cards > 0 and c.lessons_reviewed == 0
+                if (
+                    not c.practiced
+                    or c.accuracy < self.WEAK_ACCURACY_THRESHOLD
+                    or under_reviewed
+                ):
+                    weak.append(c)
+        weak.sort(key=lambda c: (c.practiced, c.accuracy, c.answered, c.concept))
+        slugs = [c.concept for c in weak]
+        return slugs[:limit] if limit > 0 else slugs
