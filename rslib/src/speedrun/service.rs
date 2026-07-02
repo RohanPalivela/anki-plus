@@ -11,9 +11,18 @@ use crate::prelude::*;
 use crate::speedrun::MissReason;
 
 /// D-6 abstention: minimum graded responses before a Memory score is emitted.
-const MEMORY_MIN_GRADED: usize = 30;
+///
+/// Kept low enough that a single guided session can clear it: the Phase-2
+/// flashcard cap (`DEFAULT_SESSION_FLASHCARD_CAP`) bounds how many memory cards
+/// one round can grade, so this must stay well under that cap or the tile can
+/// never leave the abstaining state after one cycle.
+const MEMORY_MIN_GRADED: usize = 5;
 /// D-6 abstention: minimum blueprint-topic coverage before emitting a score.
-const MEMORY_MIN_COVERAGE: f32 = 0.60;
+///
+/// Low enough that studying even a single blueprint topic in one round
+/// (1/7 ≈ 0.14) clears the gate, rather than requiring misses spread across a
+/// majority of topics.
+const MEMORY_MIN_COVERAGE: f32 = 0.10;
 /// Two-sided 80% normal quantile, for the Memory uncertainty interval.
 const Z_80: f32 = 1.2816;
 

@@ -5,8 +5,16 @@
 //!
 //! Reuses the exact read-only FSRS retrievability call used by the stats graphs
 //! (`current_retrievability_seconds`, gated on `card.memory_state`) and
-//! aggregates it to a stability-weighted per-topic mastery over **activated**
-//! (non-suspended) cards carrying each `topic::` tag.
+//! aggregates it to an **unweighted** (equal per-card) mean per-topic mastery
+//! over **activated** (non-suspended) cards carrying each `topic::` tag.
+//!
+//! Mastery is **projected to a future horizon** (an optional configured exam
+//! date, else a small default), not measured at "now". Measured at now, a card
+//! reviewed seconds ago reads ~100% retrievability regardless of whether it was
+//! graded Again/Hard/Good/Easy — the forgetting curve hasn't decayed yet — so
+//! the score would read a deceptive ~100% right after every session. Projecting
+//! to the horizon lets a lapsed (low-stability) card decay below a well-learned
+//! (high-stability) one, so Again/Hard pull the score down immediately.
 //!
 //! This is consumed by BOTH value ordering (via
 //! [`Collection::topic_weakness_map`]) and the Memory model — it is created
@@ -27,9 +35,38 @@ use crate::search::StateKind;
 use crate::speedrun::QUESTION_NOTETYPE_NAME;
 use crate::speedrun::TOPIC_TAG_PREFIX;
 
+/// Config key: project mastery retrievability this many days into the future,
+/// so recently-missed (low-stability) cards read low immediately instead of a
+/// deceptive ~100% right after review. camelCase to match the sibling keys.
+pub(crate) const MASTERY_HORIZON_DAYS_CONFIG_KEY: &str = "speedrunMasteryHorizonDays";
+
+/// Config key: absolute exam/target date as unix seconds. When set and in the
+/// future it overrides the day horizon — mastery becomes "probability you'll
+/// still recall this on exam day", which is the metric a learner actually cares
+/// about.
+pub(crate) const EXAM_DATE_CONFIG_KEY: &str = "speedrunExamDate";
+
+/// Fallback projection horizon when no exam date is configured. A one-week
+/// retention horizon is the honest readiness question for exam prep ("will I
+/// still recall this in a week?"): a just-lapsed sub-day-stability card decays
+/// to near zero while a well-learned card stays high, so Again/Hard answers pull
+/// the score down the way a learner expects. A 1-day horizon is too lenient
+/// (you can recall almost anything tomorrow); a much longer one collapses even
+/// solid cards. Overridden by a configured future exam date.
+pub(crate) const DEFAULT_MASTERY_HORIZON_DAYS: f64 = 7.0;
+
+/// Clamp on the projection horizon so a distant or misconfigured exam date can't
+/// push every card's retrievability to ~0 (which would make the score useless).
+/// ~180 days spans a full prep cycle.
+const MAX_MASTERY_HORIZON_DAYS: f64 = 180.0;
+
+/// Seconds per day, for horizon arithmetic.
+const SECONDS_PER_DAY: f64 = 86_400.0;
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct TopicMastery {
-    /// Stability-weighted mean FSRS retrievability over activated cards (0..1).
+    /// Unweighted (equal per-card) mean FSRS retrievability over activated cards
+    /// (0..1), projected to the mastery horizon (see module docs).
     pub mastery: f32,
     /// Number of activated cards with FSRS memory state that contributed.
     pub card_count: usize,
@@ -43,24 +80,33 @@ pub(crate) struct MasteryData {
     pub by_topic: HashMap<String, TopicMastery>,
     /// Distinct activated cards with FSRS memory state.
     pub graded_count: usize,
-    /// Global stability-weighted mean retrievability (0..1) over those cards.
+    /// Global unweighted mean retrievability (0..1) over those cards.
     pub overall: f32,
 }
 
-/// Running stability-weighted accumulator: (Σ R·S, Σ S, count).
+/// Running **unweighted** retrievability accumulator: (Σ R, count).
+///
+/// Deliberately NOT stability-weighted. A stability-weighted mean
+/// (`Σ(R·S)/Σ(S)`) lets high-stability (well-learned) cards dominate while
+/// just-lapsed Again/Hard cards — which have tiny stability — contribute almost
+/// nothing, so misses become nearly invisible and the score reads far too high.
+/// An equal per-card mean makes every activated card count the same, so a batch
+/// of Again/Hard answers pulls mastery down the way a learner expects.
 #[derive(Default, Clone, Copy)]
-struct Accumulator(f32, f32, usize);
+struct Accumulator {
+    sum_r: f32,
+    count: usize,
+}
 
 impl Accumulator {
-    fn add(&mut self, r: f32, stability: f32) {
-        self.0 += r * stability;
-        self.1 += stability;
-        self.2 += 1;
+    fn add(&mut self, r: f32) {
+        self.sum_r += r;
+        self.count += 1;
     }
 
     fn mean(&self) -> f32 {
-        if self.1 > 0.0 {
-            self.0 / self.1
+        if self.count > 0 {
+            self.sum_r / self.count as f32
         } else {
             0.0
         }
@@ -68,6 +114,28 @@ impl Accumulator {
 }
 
 impl Collection {
+    /// How many seconds into the future to project retrievability for the
+    /// mastery pass. Prefers a configured exam date (so mastery reads as "chance
+    /// you'll still recall this on exam day"); otherwise the day-horizon config,
+    /// else [`DEFAULT_MASTERY_HORIZON_DAYS`]. Clamped to a sane maximum so a
+    /// distant/misconfigured date can't collapse every card to ~0.
+    fn mastery_horizon_seconds(&self) -> u32 {
+        let max_seconds = MAX_MASTERY_HORIZON_DAYS * SECONDS_PER_DAY;
+        // A configured future exam date wins: project exactly to it.
+        if let Some(exam_secs) = self.get_config_optional::<i64, _>(EXAM_DATE_CONFIG_KEY) {
+            let remaining = (exam_secs - TimestampSecs::now().0) as f64;
+            if remaining > 0.0 {
+                return remaining.min(max_seconds) as u32;
+            }
+        }
+        let days = self
+            .get_config_optional::<f64, _>(MASTERY_HORIZON_DAYS_CONFIG_KEY)
+            .filter(|d| d.is_finite() && *d >= 0.0)
+            .unwrap_or(DEFAULT_MASTERY_HORIZON_DAYS)
+            .min(MAX_MASTERY_HORIZON_DAYS);
+        (days * SECONDS_PER_DAY) as u32
+    }
+
     /// Single FSRS pass over ACTIVATED (non-suspended) cards carrying any
     /// `topic::` tag, producing both the per-topic map (T3a) and the
     /// collection-wide aggregates (1b). Read-only; never mutates.
@@ -92,6 +160,7 @@ impl Collection {
         let note_topics = self.note_topic_map(&note_ids)?;
 
         let timing = self.timing_today()?;
+        let horizon_seconds = self.mastery_horizon_seconds();
         let fsrs = FSRS::new(None).unwrap();
         let mut by_topic: HashMap<String, Accumulator> = HashMap::new();
         let mut global = Accumulator::default();
@@ -103,18 +172,21 @@ impl Collection {
                 continue;
             };
             let elapsed_seconds = card.seconds_since_last_review(&timing).unwrap_or_default();
+            // Project past the horizon: at now, elapsed≈0 for a just-reviewed
+            // card so R≈1.0 regardless of grade; at elapsed+horizon a lapsed
+            // (low-stability) card has decayed while a well-learned one has not.
+            let projected_seconds = elapsed_seconds.saturating_add(horizon_seconds);
             let r = fsrs.current_retrievability_seconds(
                 state.into(),
-                elapsed_seconds,
+                projected_seconds,
                 card.decay.unwrap_or(FSRS5_DEFAULT_DECAY),
             );
-            // Guard against a zero/degenerate stability so the weighted mean is
-            // well defined.
-            let stability = state.stability.max(f32::MIN_POSITIVE);
             // Each card counts once globally, but towards every topic it carries.
-            global.add(r, stability);
+            // Equal weight per card (see Accumulator): a low-stability Again/Hard
+            // card counts as much as a well-learned one, so misses are visible.
+            global.add(r);
             for topic in topics {
-                by_topic.entry(topic.clone()).or_default().add(r, stability);
+                by_topic.entry(topic.clone()).or_default().add(r);
             }
         }
 
@@ -126,12 +198,12 @@ impl Collection {
                         topic,
                         TopicMastery {
                             mastery: acc.mean(),
-                            card_count: acc.2,
+                            card_count: acc.count,
                         },
                     )
                 })
                 .collect(),
-            graded_count: global.2,
+            graded_count: global.count,
             overall: global.mean(),
         })
     }
@@ -187,6 +259,7 @@ mod test {
     use crate::card::FsrsMemoryState;
     use crate::notetype::Notetype;
     use crate::prelude::*;
+    use crate::speedrun::mastery::MASTERY_HORIZON_DAYS_CONFIG_KEY;
     use crate::speedrun::test_helpers::*;
     use crate::speedrun::QUESTION_NOTETYPE_NAME;
 
@@ -202,6 +275,21 @@ mod test {
             difficulty: 5.0,
         });
         card.last_review_time = Some(TimestampSecs(1_000));
+        col.update_cards_maybe_undoable(vec![card], false).unwrap();
+    }
+
+    /// Like [`grade_card`] but with a caller-chosen stability and a review time
+    /// of *now*, so elapsed≈0 (mirroring a card just answered this session).
+    fn grade_card_now(col: &mut Collection, note: &Note, stability: f32) {
+        let cid = col.storage.card_ids_of_notes(&[note.id]).unwrap()[0];
+        let mut card = col.storage.get_card(cid).unwrap().unwrap();
+        card.ctype = CardType::Review;
+        card.queue = CardQueue::Review;
+        card.memory_state = Some(FsrsMemoryState {
+            stability,
+            difficulty: 5.0,
+        });
+        card.last_review_time = Some(TimestampSecs::now());
         col.update_cards_maybe_undoable(vec![card], false).unwrap();
     }
 
@@ -245,6 +333,67 @@ mod test {
         assert!(
             !data.by_topic.contains_key("qonly"),
             "question-only topic must not appear in mastery"
+        );
+    }
+
+    /// A card just reviewed with sub-day stability (i.e. lapsed / graded
+    /// Again-Hard) must read materially lower mastery than a just-reviewed,
+    /// high-stability one — even though both were reviewed *now* (elapsed≈0).
+    /// Without horizon projection both would read ~1.0; with it, the low-
+    /// stability card decays below the strong one, so misses show up right away.
+    #[test]
+    fn projection_penalizes_low_stability_cards() {
+        let mut col = Collection::new();
+        col.set_config(MASTERY_HORIZON_DAYS_CONFIG_KEY, &1.0_f64)
+            .unwrap();
+
+        let weak = add_note_with_tags(&mut col, &["topic::weak"]);
+        grade_card_now(&mut col, &weak, 0.2); // ~5h stability -> decays fast
+        let strong = add_note_with_tags(&mut col, &["topic::strong"]);
+        grade_card_now(&mut col, &strong, 100.0); // months of stability
+
+        let data = col.compute_topic_mastery().unwrap();
+        let weak_m = data.by_topic.get("weak").unwrap().mastery;
+        let strong_m = data.by_topic.get("strong").unwrap().mastery;
+
+        assert!(
+            weak_m < strong_m,
+            "low-stability mastery {weak_m} should be below high-stability {strong_m}"
+        );
+        assert!(
+            weak_m < 0.9,
+            "a sub-day-stability card should read well under 1.0 at a 1-day horizon, got {weak_m}"
+        );
+        assert!(
+            strong_m > 0.95,
+            "a high-stability card should stay near 1.0 at a 1-day horizon, got {strong_m}"
+        );
+    }
+
+    /// Within one topic, a just-lapsed (low-stability) card must drag the topic
+    /// mastery down toward the midpoint rather than being masked by a strong
+    /// card. Under the old stability-weighted mean the strong card's huge
+    /// stability dominated (topic ≈ strong card ≈ ~0.95); the unweighted mean
+    /// gives each card equal say, so a strong+weak pair lands well below 0.95.
+    #[test]
+    fn mastery_is_unweighted_across_stability() {
+        let mut col = Collection::new();
+        col.set_config(MASTERY_HORIZON_DAYS_CONFIG_KEY, &1.0_f64)
+            .unwrap();
+
+        let strong = add_note_with_tags(&mut col, &["topic::mix"]);
+        grade_card_now(&mut col, &strong, 100.0);
+        let weak = add_note_with_tags(&mut col, &["topic::mix"]);
+        grade_card_now(&mut col, &weak, 0.2);
+
+        let data = col.compute_topic_mastery().unwrap();
+        let mix = data.by_topic.get("mix").unwrap();
+        assert_eq!(mix.card_count, 2);
+        assert!(
+            mix.mastery < 0.9,
+            "unweighted mean of a strong+weak pair should sit clearly below the \
+             strong card's ~0.95 (stability weighting would keep it ~0.95); got {}",
+            mix.mastery
         );
     }
 }
