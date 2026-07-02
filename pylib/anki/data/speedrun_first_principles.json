@@ -184,6 +184,398 @@
       "concept": "social-class",
       "front": "First principle: define social stratification and the main types of social mobility.",
       "back": "Stratification is the hierarchical ranking of groups by access to resources such as wealth, status, and power; socioeconomic status combines income, education, and occupation. Mobility can be intragenerational (within one lifetime) or intergenerational (across generations), and systems range from open (class-based, mobility possible) to closed (caste-based, status ascribed at birth)."
+    },
+    {
+      "uid": "fp-biochem-protein-structure-1",
+      "topic": "biochemistry",
+      "concept": "amino-acids",
+      "front": "First principle: what bond links amino acids, and what are the four levels of protein structure?",
+      "back": "Amino acids join by a peptide (amide) bond formed in a dehydration reaction between one residue's carboxyl and the next's amino group; the chain runs N-terminus to C-terminus. Primary structure is the sequence; secondary is local hydrogen-bonded patterns (alpha-helix, beta-sheet); tertiary is the overall 3D fold driven mainly by side-chain interactions, especially the hydrophobic effect; quaternary is the assembly of multiple polypeptide subunits."
+    },
+    {
+      "uid": "fp-biochem-aminoacid-classes-1",
+      "topic": "biochemistry",
+      "concept": "amino-acids",
+      "front": "First principle: how are the 20 standard amino acids classified by their side chains?",
+      "back": "Every standard amino acid has an alpha-carbon bonded to an amino group, a carboxyl group, an H, and a variable R group; glycine's R is just H, so it is achiral. Side chains sort into nonpolar/hydrophobic, polar uncharged, acidic (negatively charged, e.g. Asp/Glu), and basic (positively charged, e.g. Lys/Arg/His). The R group's chemistry sets where a residue sits in a folded protein and how it behaves at a given pH."
+    },
+    {
+      "uid": "fp-biochem-enzyme-regulation-2",
+      "topic": "biochemistry",
+      "concept": "enzyme-regulation",
+      "front": "First principle: how do allosteric regulation, cooperativity, and feedback inhibition control enzyme activity?",
+      "back": "Allosteric regulators bind a site other than the active site, shifting the enzyme between more- and less-active conformations. Cooperative enzymes (and proteins like hemoglobin) show sigmoidal kinetics because binding at one subunit changes affinity at the others. Feedback (end-product) inhibition lets a pathway's product allosterically shut down an upstream enzyme, matching output to demand. Many enzymes also require cofactors or coenzymes to catalyze at all."
+    },
+    {
+      "uid": "fp-biochem-bioenergetics-2",
+      "topic": "biochemistry",
+      "concept": "bioenergetics",
+      "front": "First principle: how do the standard free-energy change and the equilibrium constant relate, and why can the actual delta_G differ?",
+      "back": "delta_G_standard = -RT ln(Keq): a negative standard free energy corresponds to Keq > 1, favoring products. But the actual delta_G = delta_G_standard + RT ln(Q), so the real direction depends on current concentrations through the reaction quotient Q, not just the standard value. A reaction with an unfavorable delta_G_standard can still run forward if products are kept scarce (Q < Keq)."
+    },
+    {
+      "uid": "fp-biochem-citric-acid-cycle-1",
+      "topic": "biochemistry",
+      "concept": "glycolysis",
+      "front": "First principle: what happens to pyruvate aerobically, and what does one turn of the citric acid cycle yield?",
+      "back": "With oxygen, pyruvate enters the mitochondrion and is oxidatively decarboxylated to acetyl-CoA, releasing CO2 and making NADH. Each acetyl-CoA entering the citric acid (Krebs) cycle yields, per turn, 3 NADH, 1 FADH2, 1 GTP (or ATP), and 2 CO2. The cycle's main purpose is not ATP itself but harvesting high-energy electrons (NADH/FADH2) to feed the electron transport chain."
+    },
+    {
+      "uid": "fp-biochem-carbohydrates-1",
+      "topic": "biochemistry",
+      "concept": "glycolysis",
+      "front": "First principle: how are carbohydrates classified, and what bond links monosaccharide units?",
+      "back": "Carbohydrates are monosaccharides (e.g. glucose, fructose), disaccharides, or polysaccharides. Units join through glycosidic bonds formed by dehydration; hydrolysis breaks them apart. Storage polymers (starch, glycogen) use mostly alpha linkages that enzymes readily digest, while structural cellulose uses beta linkages humans cannot break. In solution, sugars interconvert between open-chain and ring forms, creating anomers."
+    },
+    {
+      "uid": "fp-biochem-nucleic-acids-1",
+      "topic": "biochemistry",
+      "concept": "nucleic-acids",
+      "front": "First principle: what are the building blocks of nucleic acids, and what rules govern base pairing?",
+      "back": "A nucleotide is a five-carbon sugar plus a phosphate and a nitrogenous base; nucleotides link by phosphodiester bonds into a strand with a 5' and a 3' end. DNA is a double helix of two antiparallel strands held by hydrogen bonds: A pairs with T (two H-bonds) and G with C (three), so G-C-rich regions are more stable. RNA is usually single-stranded and uses uracil in place of thymine."
+    },
+    {
+      "uid": "fp-biochem-dna-replication-1",
+      "topic": "biochemistry",
+      "concept": "nucleic-acids",
+      "front": "First principle: why is DNA replication called semiconservative, and why does one strand lag?",
+      "back": "Each parent strand serves as a template, so every daughter duplex has one old and one new strand (semiconservative). DNA polymerase adds nucleotides only 5' to 3', so on the antiparallel template one new strand is built continuously (leading) and the other in short Okazaki fragments (lagging) that ligase later joins. Synthesis needs an RNA primer, and proofreading keeps the error rate very low."
+    },
+    {
+      "uid": "fp-biochem-membrane-1",
+      "topic": "biochemistry",
+      "concept": "lipids-membranes",
+      "front": "First principle: why do phospholipids form bilayers, and what sets membrane fluidity?",
+      "back": "Phospholipids are amphipathic: a hydrophilic phosphate head and hydrophobic fatty-acid tails, so in water they self-assemble into a bilayer with tails inward, the basis of the fluid mosaic model. Fluidity rises with unsaturated (kinked) tails and higher temperature; in animals cholesterol buffers fluidity, keeping the membrane from getting too rigid when cold or too loose when warm. The hydrophobic core blocks ions and large polar molecules, making the membrane selectively permeable."
+    },
+    {
+      "uid": "fp-biochem-lipids-1",
+      "topic": "biochemistry",
+      "concept": "lipids-membranes",
+      "front": "First principle: what distinguishes the major lipid classes, and why are lipids energy-dense?",
+      "back": "Lipids are grouped by structure: triacylglycerols (glycerol plus three fatty acids) store energy; phospholipids and glycolipids build membranes; steroids (e.g. cholesterol, steroid hormones) share a four-ring skeleton. Fatty acids are saturated (no C=C, pack tightly, tend to be solid) or unsaturated (cis double bonds, kinked, tend to be liquid). Because their carbons are highly reduced, fats yield more ATP per gram than carbohydrates when oxidized."
+    },
+    {
+      "uid": "fp-bio-gene-regulation-1",
+      "topic": "biology",
+      "concept": "transcription-translation",
+      "front": "First principle: how do prokaryotes and eukaryotes differ in regulating gene expression?",
+      "back": "Prokaryotes group related genes into operons run from one promoter: an inducible lac operon switches on only when lactose is present, while a repressible trp operon switches off when tryptophan is abundant. Eukaryotes lack operons and instead regulate at many steps: transcription factors and enhancers, chromatin/epigenetic state, RNA splicing, and mRNA stability. This regulation lets one genome build many cell types."
+    },
+    {
+      "uid": "fp-bio-inheritance-patterns-1",
+      "topic": "biology",
+      "concept": "mendelian-genetics",
+      "front": "First principle: what inheritance patterns depart from simple Mendelian dominance?",
+      "back": "Incomplete dominance blends phenotypes (red x white -> pink); codominance expresses both alleles fully (AB blood type). Genes close together on a chromosome are linked and violate independent assortment unless recombination separates them. Sex-linked (X-linked recessive) traits appear more often in males, who carry a single X. Many traits are polygenic, producing continuous variation rather than discrete classes."
+    },
+    {
+      "uid": "fp-bio-cell-organelles-1",
+      "topic": "biology",
+      "concept": "cell-biology",
+      "front": "First principle: what separates prokaryotic from eukaryotic cells, and what do the key organelles do?",
+      "back": "Prokaryotes lack a nucleus and membrane-bound organelles; eukaryotes compartmentalize functions inside them. The nucleus stores DNA, mitochondria make ATP, ribosomes build proteins, the rough ER and Golgi process and package them, lysosomes digest waste, and the cytoskeleton gives shape and moves cargo. Compartmentalization lets otherwise incompatible reactions run at once in one cell."
+    },
+    {
+      "uid": "fp-bio-endomembrane-1",
+      "topic": "biology",
+      "concept": "cell-biology",
+      "front": "First principle: trace the path of a secreted protein through the endomembrane system.",
+      "back": "A protein destined for secretion is translated on ribosomes bound to the rough ER, then folded and glycosylated in the ER lumen, and shipped in transport vesicles to the Golgi apparatus for further modification and sorting. The Golgi buds off vesicles that fuse with the plasma membrane, releasing the contents by exocytosis. This flow keeps synthesis, modification, and export spatially organized."
+    },
+    {
+      "uid": "fp-bio-cell-division-1",
+      "topic": "biology",
+      "concept": "cell-division",
+      "front": "First principle: how do mitosis and meiosis differ in outcome and genetic content?",
+      "back": "Mitosis makes two genetically identical diploid daughter cells for growth and repair. Meiosis runs two divisions to make four genetically unique haploid gametes: homologous chromosomes pair and cross over in prophase I, then separate in meiosis I (halving ploidy), while sister chromatids separate in meiosis II. Crossing over plus independent assortment generate the genetic diversity of gametes."
+    },
+    {
+      "uid": "fp-bio-immunity-1",
+      "topic": "biology",
+      "concept": "microbiology-immunology",
+      "front": "First principle: how do innate and adaptive immunity differ, and what makes adaptive immunity specific?",
+      "back": "Innate immunity is fast, nonspecific, and lacks memory: barriers, phagocytes, inflammation, and complement. Adaptive immunity is slower but specific and remembers: B cells make antibodies (humoral) while T cells kill infected cells or coordinate the response (cell-mediated). Clonal selection expands the lymphocytes matching a given antigen, and memory cells make a second exposure faster and stronger, which is the basis of vaccination."
+    },
+    {
+      "uid": "fp-bio-neuron-1",
+      "topic": "biology",
+      "concept": "physiology",
+      "front": "First principle: what generates and propagates a neuron's action potential?",
+      "back": "Neurons hold a negative resting potential (about -70 mV) via the Na+/K+ pump and selective K+ leak. A stimulus past threshold opens voltage-gated Na+ channels for rapid depolarization; the Na+ channels then inactivate and K+ channels open for repolarization, briefly overshooting into hyperpolarization. The spike is all-or-none and travels one way, and myelin speeds it by letting the signal jump between nodes of Ranvier (saltatory conduction)."
+    },
+    {
+      "uid": "fp-bio-circulation-1",
+      "topic": "biology",
+      "concept": "physiology",
+      "front": "First principle: how does the circulatory system route blood, and how are respiratory gases exchanged?",
+      "back": "The heart pumps a double loop: the right side sends deoxygenated blood through the pulmonary circuit to the lungs, and the left side pumps oxygenated blood through the systemic circuit to the body. Gases move by simple diffusion down partial-pressure gradients, O2 into blood and CO2 out at the alveoli and the reverse at the tissues. Hemoglobin binds O2 cooperatively, loading it in the lungs and unloading it where tissue is acidic and O2-poor (the Bohr effect)."
+    },
+    {
+      "uid": "fp-bio-endocrine-1",
+      "topic": "biology",
+      "concept": "physiology",
+      "front": "First principle: how do hormones and negative feedback maintain homeostasis?",
+      "back": "Endocrine glands secrete hormones into the blood to act on distant target cells that carry matching receptors; peptide hormones bind surface receptors and act quickly through second messengers, while steroid hormones enter cells and change gene transcription more slowly. Most systems use negative feedback, where a change triggers a response that opposes it and holds variables such as glucose, temperature, and ions near a set point. Positive feedback (e.g. labor contractions) instead amplifies a change toward an endpoint."
+    },
+    {
+      "uid": "fp-bio-renal-1",
+      "topic": "biology",
+      "concept": "physiology",
+      "front": "First principle: how does the nephron form urine and regulate blood composition?",
+      "back": "The nephron filters blood at the glomerulus, then fine-tunes the filtrate: useful solutes and water are reabsorbed into the blood while additional wastes are secreted into the tubule. The kidney thereby regulates fluid volume, electrolytes, and pH, and hormones adjust it: ADH increases water reabsorption (concentrating urine) and aldosterone drives Na+ (and thus water) retention. This keeps blood osmolarity and pressure within narrow limits."
+    },
+    {
+      "uid": "fp-bio-evolution-1",
+      "topic": "biology",
+      "concept": "evolution-ecology",
+      "front": "First principle: what does Hardy-Weinberg equilibrium assume, and what drives evolution away from it?",
+      "back": "For a non-evolving population, allele frequencies stay fixed and p^2 + 2pq + q^2 = 1 (with p + q = 1). It assumes no mutation, no migration, random mating, no selection, and an infinite population. Real populations evolve when these fail: natural selection favors advantageous alleles, while mutation, gene flow, and genetic drift (strong in small populations) also shift allele frequencies. Fitness means reproductive success, not mere survival."
+    },
+    {
+      "uid": "fp-gchem-titration-1",
+      "topic": "general-chemistry",
+      "concept": "acid-base-equilibria",
+      "front": "First principle: what happens at the equivalence and half-equivalence points of an acid-base titration?",
+      "back": "At the equivalence point the moles of added titrant equal the moles of analyte; for a strong acid with a strong base the pH there is 7, but titrating a weak acid with a strong base leaves the conjugate base, so the equivalence pH is above 7. At the half-equivalence point half the weak acid is neutralized, so [HA] = [A-] and pH = pKa, the region of maximum buffering. A good indicator changes color near the equivalence pH."
+    },
+    {
+      "uid": "fp-gchem-atomic-structure-1",
+      "topic": "general-chemistry",
+      "concept": "atomic-structure",
+      "front": "First principle: how do electron configuration and effective nuclear charge explain the periodic trends?",
+      "back": "Electrons fill orbitals from lowest energy up (Aufbau), one per orbital before pairing (Hund), with opposite spins (Pauli). Across a period, effective nuclear charge rises while shielding stays about constant, so atomic radius shrinks and ionization energy and electronegativity increase; down a group, added shells enlarge the atom and lower ionization energy. The valence configuration dictates chemical behavior."
+    },
+    {
+      "uid": "fp-gchem-bonding-1",
+      "topic": "general-chemistry",
+      "concept": "chemical-bonding",
+      "front": "First principle: what distinguishes ionic, covalent, and polar covalent bonds, and how does shape set molecular polarity?",
+      "back": "Large electronegativity differences transfer electrons (ionic); small or zero differences share them (covalent), with intermediate differences giving polar covalent bonds and partial charges. VSEPR predicts geometry because electron domains repel to maximize separation (e.g. tetrahedral, trigonal planar, bent). A molecule is polar only if its bond dipoles do not cancel by symmetry: CO2 is linear and nonpolar, while water is bent and polar."
+    },
+    {
+      "uid": "fp-gchem-thermochemistry-1",
+      "topic": "general-chemistry",
+      "concept": "thermochemistry",
+      "front": "First principle: what is enthalpy, and why does Hess's law let you add reaction steps?",
+      "back": "Enthalpy change (delta_H) is the heat exchanged at constant pressure: negative for exothermic and positive for endothermic reactions. Because enthalpy is a state function, it depends only on the initial and final states, not the path taken, so Hess's law says the delta_H of an overall reaction equals the sum of the delta_H values of steps that add up to it. This lets an unknown enthalpy be computed from known formation or reaction enthalpies."
+    },
+    {
+      "uid": "fp-gchem-kinetics-1",
+      "topic": "general-chemistry",
+      "concept": "kinetics-equilibrium",
+      "front": "First principle: what controls reaction rate, and how do catalysts and temperature affect it?",
+      "back": "Rate depends on reactant concentrations through an experimentally determined rate law (rate = k[A]^m[B]^n) and on the rate-determining (slowest) step. Only molecules that collide with proper orientation and at least the activation energy react, so raising temperature speeds a reaction by giving more molecules that energy. A catalyst lowers the activation energy by offering an alternative pathway; it is not consumed and does not shift the equilibrium position."
+    },
+    {
+      "uid": "fp-gchem-equilibrium-1",
+      "topic": "general-chemistry",
+      "concept": "kinetics-equilibrium",
+      "front": "First principle: what does the equilibrium constant mean, and how does Le Chatelier's principle predict shifts?",
+      "back": "At equilibrium the forward and reverse rates are equal and K = [products]/[reactants], each raised to its coefficient; K > 1 favors products. Comparing the reaction quotient Q to K gives the direction of net change. Le Chatelier's principle says a system at equilibrium responds to a stress (added reactant or product, a volume/pressure change, a temperature change) by shifting to partly counteract it, but only a temperature change actually alters the value of K."
+    },
+    {
+      "uid": "fp-gchem-solutions-1",
+      "topic": "general-chemistry",
+      "concept": "solutions",
+      "front": "First principle: how is concentration expressed, and why are colligative properties about particle count?",
+      "back": "Molarity is moles of solute per liter of solution, and dilution conserves moles, so M1 V1 = M2 V2. Colligative properties depend on the number of dissolved particles, not their identity: added solute raises the boiling point, lowers the freezing point, and creates osmotic pressure. An electrolyte that dissociates into several ions (its van't Hoff factor) multiplies the effect relative to a nonelectrolyte."
+    },
+    {
+      "uid": "fp-gchem-solubility-1",
+      "topic": "general-chemistry",
+      "concept": "solutions",
+      "front": "First principle: what does Ksp describe, and how does the common-ion effect change solubility?",
+      "back": "For a sparingly soluble salt, Ksp is the equilibrium constant for its dissolution into ions; the salt precipitates when the ion product exceeds Ksp and dissolves when it is below. Adding an ion the salt already contains (a common ion) shifts the dissolution equilibrium toward the solid, lowering solubility. The 'like dissolves like' rule still governs which solvents dissolve a given solute."
+    },
+    {
+      "uid": "fp-ochem-chromatography-1",
+      "topic": "organic-chemistry",
+      "concept": "separations-and-purifications",
+      "front": "First principle: what physical property does each major separation technique exploit?",
+      "back": "Distillation separates liquids by boiling point, that is, by differences in volatility. Chromatography separates by differential partitioning between a mobile and a stationary phase, so a compound more attracted to the stationary phase moves slower (a lower Rf). Recrystallization purifies a solid by dissolving it hot and letting the target crystallize out pure on cooling. Each method sorts a mixture by a difference in one physical property."
+    },
+    {
+      "uid": "fp-ochem-functional-groups-1",
+      "topic": "organic-chemistry",
+      "concept": "functional-groups",
+      "front": "First principle: how are functional groups ranked for naming and by carbon oxidation state?",
+      "back": "IUPAC names choose the longest chain containing the highest-priority functional group, which takes the lowest locant and the suffix; carboxylic acids outrank esters and amides, then aldehydes, ketones, alcohols, and amines. A carbon's oxidation state tracks its bonds to more electronegative atoms, so alcohol -> aldehyde/ketone -> carboxylic acid is progressive oxidation and the reverse is reduction. Recognizing the group predicts reactivity."
+    },
+    {
+      "uid": "fp-ochem-carbonyl-reactivity-1",
+      "topic": "organic-chemistry",
+      "concept": "functional-groups",
+      "front": "First principle: why is the carbonyl carbon electrophilic, and why is an aldehyde more reactive than a ketone?",
+      "back": "The C=O bond is polarized because oxygen is more electronegative, leaving the carbonyl carbon partially positive (electrophilic) and open to nucleophilic attack. Aldehydes react faster than ketones toward nucleophiles because they have less steric hindrance and only one electron-donating alkyl group, rather than two, stabilizing the partial positive charge. Carboxylic-acid derivatives instead react by nucleophilic acyl substitution, their reactivity set by how good the leaving group is."
+    },
+    {
+      "uid": "fp-ochem-substitution-1",
+      "topic": "organic-chemistry",
+      "concept": "reaction-mechanisms",
+      "front": "First principle: what distinguishes an SN1 from an SN2 substitution?",
+      "back": "SN2 is a single-step backside attack: the rate depends on both the nucleophile and the substrate (second order), it inverts stereochemistry, and it favors unhindered (methyl or primary) carbons, strong nucleophiles, and aprotic solvents. SN1 goes through a carbocation intermediate: the rate depends only on the substrate (first order), it favors tertiary carbons and protic solvents, and it gives racemization. Elimination (E1/E2) competes, especially with heat and strong bases."
+    },
+    {
+      "uid": "fp-ochem-addition-1",
+      "topic": "organic-chemistry",
+      "concept": "reaction-mechanisms",
+      "front": "First principle: how do electrophilic additions to alkenes follow Markovnikov's rule?",
+      "back": "A C=C double bond is electron-rich and acts as a nucleophile toward electrophiles. When H-X adds, the proton bonds so as to generate the more stable (more substituted) carbocation, so the halide ends up on the more substituted carbon, which is Markovnikov's rule. Anti-Markovnikov products form under radical conditions (e.g. HBr with peroxides). Addition increases saturation and is the reverse of elimination."
+    },
+    {
+      "uid": "fp-ochem-ir-1",
+      "topic": "organic-chemistry",
+      "concept": "spectroscopy",
+      "front": "First principle: what molecular feature does infrared spectroscopy detect?",
+      "back": "IR light excites bond vibrations, so its absorptions identify functional groups by their characteristic stretching frequencies: a broad band near 3300 cm^-1 signals an O-H (alcohol), and a strong band near 1700 cm^-1 signals a C=O (carbonyl). Stiffer bonds and lighter atoms vibrate at higher frequency. IR tells you which groups are present, not the full carbon skeleton."
+    },
+    {
+      "uid": "fp-ochem-nmr-1",
+      "topic": "organic-chemistry",
+      "concept": "spectroscopy",
+      "front": "First principle: what do chemical shift, integration, and splitting reveal in proton NMR?",
+      "back": "1H NMR probes hydrogen environments: the chemical shift reflects electron shielding, so protons near electronegative atoms move downfield. The number of distinct signals equals the number of chemically distinct H environments, and integration gives the relative number of hydrogens per signal. Splitting follows the n+1 rule, where a proton with n equivalent neighbors shows n+1 peaks, revealing the adjacent hydrogens."
+    },
+    {
+      "uid": "fp-phys-kinematics-1",
+      "topic": "physics",
+      "concept": "kinematics-dynamics",
+      "front": "First principle: what do the kinematic equations assume, and how do the parts of projectile motion relate?",
+      "back": "The standard equations (e.g. v = v0 + a t and x = v0 t + (1/2) a t^2) hold only for constant acceleration. In projectile motion the horizontal and vertical components are independent: horizontal velocity is constant (no horizontal force) while the vertical component accelerates at g. Time of flight links the two, and at the top of the arc the vertical velocity is momentarily zero while the horizontal velocity is unchanged."
+    },
+    {
+      "uid": "fp-phys-newton-1",
+      "topic": "physics",
+      "concept": "kinematics-dynamics",
+      "front": "First principle: state Newton's three laws and how a free-body diagram uses them.",
+      "back": "First law (inertia): an object keeps its velocity unless a net external force acts. Second law: F_net = m a, so acceleration is proportional to the net force and inversely proportional to mass. Third law: forces occur in equal and opposite pairs acting on different objects. A free-body diagram isolates one object, draws every force on it, and resolves them into components, so the net force along each axis gives the acceleration."
+    },
+    {
+      "uid": "fp-phys-fluids-static-1",
+      "topic": "physics",
+      "concept": "fluids",
+      "front": "First principle: how does pressure vary with depth, and what determines whether an object floats?",
+      "back": "In a static fluid, pressure increases with depth as P = P0 + rho g h and acts equally in all directions. A submerged object feels an upward buoyant force equal to the weight of the fluid it displaces (Archimedes' principle), so it floats when its average density is less than the fluid's, sinks when greater, and hovers when equal. Pascal's principle adds that pressure applied to an enclosed fluid transmits undiminished, the basis of hydraulic lifts."
+    },
+    {
+      "uid": "fp-phys-fluids-dynamic-1",
+      "topic": "physics",
+      "concept": "fluids",
+      "front": "First principle: what do the continuity equation and Bernoulli's principle say about a flowing fluid?",
+      "back": "For an incompressible fluid the volume flow rate is constant, so A1 v1 = A2 v2 and the fluid speeds up through a narrower pipe. Bernoulli's equation is energy conservation per unit volume: P + (1/2) rho v^2 + rho g h stays constant along a streamline, so where an ideal fluid moves faster its pressure is lower. Together they explain why a constriction raises velocity and drops pressure."
+    },
+    {
+      "uid": "fp-phys-thermal-1",
+      "topic": "physics",
+      "concept": "thermal-physics",
+      "front": "First principle: how do heat and temperature differ, and what do the first and second laws of thermodynamics state?",
+      "back": "Temperature measures the average molecular kinetic energy, whereas heat is energy transferred because of a temperature difference (Q = m c delta_T when there is no phase change). First law: delta_U = Q - W, so internal energy changes by the heat added minus the work the system does (energy is conserved). Second law: the entropy of an isolated system tends to increase, so heat flows spontaneously from hot to cold and no engine can be perfectly efficient."
+    },
+    {
+      "uid": "fp-phys-waves-1",
+      "topic": "physics",
+      "concept": "waves-sound",
+      "front": "First principle: how are a wave's speed, frequency, and wavelength related, and what causes the Doppler effect?",
+      "back": "For any wave, v = f lambda; the wave speed is set by the medium, so in a fixed medium raising the frequency shortens the wavelength. Transverse waves oscillate perpendicular to travel, while longitudinal waves such as sound oscillate parallel to it. The Doppler effect shifts the observed frequency when source and observer move relative to each other: approaching raises the pitch and receding lowers it. Standing waves form only at resonant frequencies fixed by the boundary conditions."
+    },
+    {
+      "uid": "fp-phys-magnetism-1",
+      "topic": "physics",
+      "concept": "magnetism",
+      "front": "First principle: what force does a magnetic field exert on a moving charge, and how is a current induced?",
+      "back": "A magnetic field exerts F = q v B sin(theta) on a moving charge, perpendicular to both the velocity and the field, so it changes direction but does no work; a charge moving parallel to the field feels no force. Moving charges (currents) also create magnetic fields. Faraday's law says a changing magnetic flux through a loop induces an EMF, and Lenz's law says the induced current opposes the change that produced it, the principle behind generators and transformers."
+    },
+    {
+      "uid": "fp-phys-modern-1",
+      "topic": "physics",
+      "concept": "astronomy",
+      "front": "First principle: what does the photoelectric effect reveal about light, and what binds a nucleus?",
+      "back": "The photoelectric effect shows that light is quantized: a photon carries energy E = h f, and only photons above a threshold frequency eject electrons, regardless of intensity, which is evidence for wave-particle duality. In the nucleus, the strong force binds protons and neutrons against electrostatic repulsion, and the mass defect corresponds to the binding energy via E = m c^2. Unstable nuclei decay (alpha, beta, gamma) with a characteristic half-life."
+    },
+    {
+      "uid": "fp-psych-cognition-1",
+      "topic": "psychology",
+      "concept": "cognition-language",
+      "front": "First principle: how do people solve problems and make decisions, and what are heuristics?",
+      "back": "Problem solving ranges from slow, guaranteed algorithms to fast heuristics, which are mental shortcuts that are efficient but error-prone: the availability heuristic judges likelihood by how easily examples come to mind, and the representativeness heuristic by resemblance to a prototype. Biases such as confirmation bias and framing distort judgment. Dual-process models contrast fast, automatic thinking with slow, effortful reasoning, and language develops through broadly universal stages."
+    },
+    {
+      "uid": "fp-psych-emotion-1",
+      "topic": "psychology",
+      "concept": "emotion-motivation",
+      "front": "First principle: what do the major theories of emotion and motivation propose?",
+      "back": "Theories of emotion differ in the order of events: James-Lange says physiological arousal comes first and we infer the emotion from it; Cannon-Bard says arousal and emotion occur at once; Schachter-Singer's two-factor theory says emotion is arousal plus a cognitive label. Motivation is explained by drive-reduction (restoring homeostasis), optimal arousal (Yerkes-Dodson), and incentive theories, while Maslow's hierarchy orders needs from physiological up to self-actualization."
+    },
+    {
+      "uid": "fp-psych-development-1",
+      "topic": "psychology",
+      "concept": "developmental-psychology",
+      "front": "First principle: what do stage theories of development claim, and how does Piaget frame cognitive growth?",
+      "back": "Stage theories propose that people pass through qualitatively distinct, ordered phases. Piaget's cognitive stages run from sensorimotor (object permanence), to preoperational (egocentrism, no conservation), to concrete operational (logical about concrete things), to formal operational (abstract reasoning). Erikson adds psychosocial crises across the lifespan (e.g. identity vs. role confusion in adolescence). Development reflects both maturation and experience."
+    },
+    {
+      "uid": "fp-psych-personality-1",
+      "topic": "psychology",
+      "concept": "personality",
+      "front": "First principle: how do the major perspectives explain personality?",
+      "back": "The trait perspective describes stable dimensions, most empirically the Big Five (openness, conscientiousness, extraversion, agreeableness, neuroticism). Psychoanalytic theory emphasizes unconscious conflict among id, ego, and superego; humanistic theory (Rogers, Maslow) stresses self-concept and growth; and social-cognitive theory highlights the reciprocal interaction of person, behavior, and environment. The person-situation debate weighs stable traits against situational influence on behavior."
+    },
+    {
+      "uid": "fp-psych-disorders-1",
+      "topic": "psychology",
+      "concept": "psychological-disorders",
+      "front": "First principle: how are psychological disorders defined and categorized?",
+      "back": "Behavior is generally judged disordered when it is deviant, distressing, dysfunctional, and potentially dangerous, and clinicians classify it using a manual such as the DSM. Major categories include anxiety, depressive and bipolar (mood), schizophrenia (a psychotic disorder with positive and negative symptoms), personality, and obsessive-compulsive disorders. The biopsychosocial model treats disorders as arising from interacting biological, psychological, and social factors rather than one cause."
+    },
+    {
+      "uid": "fp-psych-neuron-1",
+      "topic": "psychology",
+      "concept": "biological-psychology",
+      "front": "First principle: how do neurons communicate, and what roles do the key neurotransmitters play?",
+      "back": "A neuron fires an all-or-none action potential that reaches the axon terminal and triggers release of neurotransmitters across the synapse onto receptors of the next cell, where the signal is excitatory or inhibitory. The neurotransmitter is then cleared by reuptake or enzymatic breakdown. Examples: dopamine (reward, movement), serotonin (mood), acetylcholine (muscle activation, memory), GABA (the main inhibitory transmitter), and glutamate (the main excitatory transmitter)."
+    },
+    {
+      "uid": "fp-psych-brain-1",
+      "topic": "psychology",
+      "concept": "biological-psychology",
+      "front": "First principle: how is the nervous system organized, and what do the major brain regions do?",
+      "back": "The nervous system splits into the central (brain and spinal cord) and peripheral divisions, whose autonomic branch has sympathetic (fight-or-flight) and parasympathetic (rest-and-digest) parts. In the brain, the hindbrain (medulla, cerebellum) handles vital functions and coordination, the limbic system (amygdala, hippocampus) handles emotion and memory, and the cortex handles higher cognition, with the frontal lobes governing planning and control. These structures act as interacting networks."
+    },
+    {
+      "uid": "fp-psych-social-1",
+      "topic": "psychology",
+      "concept": "social-psychology",
+      "front": "First principle: how do people explain behavior and yield to social influence?",
+      "back": "Attribution theory distinguishes dispositional (internal) from situational (external) causes, and the fundamental attribution error is overweighting disposition when explaining others' behavior. Social influence includes conformity to group norms (Asch), obedience to authority (Milgram), and changes in effort or judgment within groups. Attitudes and behavior align more closely when cognitive dissonance pressures a person to reconcile them."
+    },
+    {
+      "uid": "fp-soc-institutions-1",
+      "topic": "sociology",
+      "concept": "social-institutions",
+      "front": "First principle: what are social institutions, and what functions do they serve?",
+      "back": "Social institutions are enduring patterns of norms and roles organized around core social needs, including family, education, religion, government, the economy, and medicine. Each socializes members and provides stability, and functionalists note they can have manifest (intended) and latent (unintended) functions. Conflict theory stresses that institutions can also reproduce inequality (e.g. unequal schools). Medicalization is the reframing of ordinary conditions as medical problems."
+    },
+    {
+      "uid": "fp-soc-demographics-1",
+      "topic": "sociology",
+      "concept": "demographics",
+      "front": "First principle: what shapes population change, and what is the demographic transition?",
+      "back": "Population change is driven by fertility, mortality, and migration, and a population pyramid displays a society's age and sex structure. The demographic transition model describes a shift from high birth and death rates to low ones as a society industrializes, producing rapid growth in the middle stages and an aging population late. Push and pull factors drive migration between regions."
+    },
+    {
+      "uid": "fp-soc-culture-1",
+      "topic": "sociology",
+      "concept": "culture-socialization",
+      "front": "First principle: what is culture, and how does socialization transmit it?",
+      "back": "Culture is the shared beliefs, values, norms, symbols, and material objects of a group, and norms range from mild folkways to strongly enforced mores. Socialization is the lifelong process by which people internalize their culture through agents such as family, peers, school, and media. Ethnocentrism judges another culture by one's own standards, whereas cultural relativism interprets a culture on its own terms."
+    },
+    {
+      "uid": "fp-soc-race-gender-1",
+      "topic": "sociology",
+      "concept": "race-gender",
+      "front": "First principle: why do sociologists treat race and gender as social constructs, and how do prejudice and discrimination differ?",
+      "back": "Race and gender are social constructs, meaning their categories and meanings are defined by society rather than fixed by biology: gender is distinguished from biological sex, and racial categories vary across cultures and eras. Prejudice is a biased attitude while discrimination is biased action, and the two can occur independently. Institutional discrimination is bias built into the routine workings of organizations, producing unequal outcomes even without individual intent."
     }
   ]
 }
