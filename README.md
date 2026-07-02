@@ -10,7 +10,7 @@ Anki-Plus keeps Anki's spaced-repetition core and adds, on top of it:
   (`rslib/src/speedrun/`): flashcards start suspended and are unsuspended only
   when a _missed_ practice question qualifies. Atomic, undo-safe, and shared
   with Android.
-- **Three honest predictions** — Memory, Performance, and Readiness, each with
+- **Three honest predictions (not finished, only mastery score currently)** — Memory, Performance, and Readiness, each with
   an uncertainty range and an abstention rule (never a score without evidence).
 - **A legally reusable MCAT question bank** ([see credits](#credits--attribution))
   imported once and synced to every device as native Anki notes.
