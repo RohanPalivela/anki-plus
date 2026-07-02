@@ -221,6 +221,9 @@ def ensure_bank_imported(mw: aqt.main.AnkiQt) -> bool:
                 mw.col.speedrun.import_first_principles()
             except FileNotFoundError:
                 pass
+        # Back-fill precise gates:: links for collections imported before gated
+        # linkage existed (once per collection; cheap no-op afterwards).
+        mw.col.speedrun.ensure_gates_linked()
         return True
     if not askUser(
         tr.speedrun_bank_required_body(),
