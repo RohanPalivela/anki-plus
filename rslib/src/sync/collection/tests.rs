@@ -286,6 +286,162 @@ async fn sync_roundtrip() -> Result<()> {
     .await
 }
 
+/// SPOV3 §2c — desktop↔Android two-way offline sync.
+///
+/// Speedrun stores everything as native Anki objects (notes, tags, cards,
+/// revlog), so it should sync "for free" over Anki's existing protocol. This
+/// test proves that end-to-end for the speedrun-specific state that the plan's
+/// acceptance calls out:
+///
+/// - **Gated card activation** (a flashcard flipped from `Suspended` → active by
+///   a missed question) propagates across devices.
+/// - **Miss-reason tags** (`miss::knowledge-gap`) propagate.
+/// - **Practice answers** (revlog reviews) from the *same question answered on
+///   both devices while offline* all merge with **none lost and none
+///   double-counted**.
+///
+/// Android and desktop share this exact Rust sync path, so verifying it here
+/// verifies it for both clients.
+#[tokio::test]
+async fn speedrun_state_syncs_across_devices_offline() -> Result<()> {
+    use crate::speedrun::test_helpers::add_note_with_tags;
+    use crate::speedrun::test_helpers::is_suspended;
+    use crate::speedrun::test_helpers::suspend;
+    use crate::speedrun::MissReason;
+
+    with_active_server(|client| async move {
+        let ctx = SyncTestContext::new(client);
+
+        // --- Baseline on the "desktop": a served question linked (shared topic)
+        // to a flashcard that starts suspended (SPOV3 "off"). Pair the two
+        // devices via the initial full sync. ---
+        let (question_nid, flashcard_nid, question_cid, flashcard_cid) = {
+            let mut col1 = ctx.col1();
+            let question = add_note_with_tags(&mut col1, &["topic::biochem", "pool::served"]);
+            let flashcard = add_note_with_tags(&mut col1, &["topic::biochem"]);
+            let qcid = col1.storage.card_ids_of_notes(&[question.id])?[0];
+            let fcid = col1.storage.card_ids_of_notes(&[flashcard.id])?[0];
+            suspend(&mut col1, &[fcid]);
+            assert!(is_suspended(&mut col1, fcid), "flashcard starts off");
+
+            let out = ctx.normal_sync(&mut col1).await;
+            assert!(matches!(
+                out.required,
+                SyncActionRequired::FullSyncRequired { .. }
+            ));
+            ctx.full_upload(col1).await;
+            (question.id, flashcard.id, qcid, fcid)
+        };
+
+        // "Android" pulls the shared collection and sees the same off-state.
+        {
+            let mut col2 = ctx.col2();
+            let out = ctx.normal_sync(&mut col2).await;
+            assert_eq!(
+                out.required,
+                SyncActionRequired::FullSyncRequired {
+                    upload_ok: false,
+                    download_ok: true,
+                }
+            );
+            ctx.full_download(col2).await;
+            let mut col2 = ctx.col2();
+            assert!(
+                is_suspended(&mut col2, flashcard_cid),
+                "suspended off-state should sync to the second device"
+            );
+        }
+
+        // --- Offline divergence: both devices study the SAME question offline. ---
+        // Desktop: miss → gated activation unsuspends the linked flashcard, tags
+        // the miss reason, and records the answer as a revlog review. Then it
+        // reconnects first.
+        {
+            let mut col1 = ctx.col1();
+            let activated =
+                col1.activate_cards_for_miss(question_nid, MissReason::KnowledgeGap)?;
+            assert_eq!(activated.output, vec![flashcard_cid]);
+            let mut q = col1.storage.get_note(question_nid)?.unwrap();
+            q.tags.push("miss::knowledge-gap".into());
+            col1.update_note(&mut q)?;
+            col1.storage.add_revlog_entry(
+                &RevlogEntry {
+                    id: RevlogId(1001),
+                    cid: question_cid,
+                    usn: Usn(-1),
+                    interval: 1,
+                    ..Default::default()
+                },
+                true,
+            )?;
+            ctx.normal_sync(&mut col1).await;
+        }
+        // Android answers the same question offline *before* it reconnects, then
+        // syncs (pushing its own review and pulling the desktop's changes).
+        {
+            let mut col2 = ctx.col2();
+            col2.storage.add_revlog_entry(
+                &RevlogEntry {
+                    id: RevlogId(1002),
+                    cid: question_cid,
+                    usn: Usn(-1),
+                    interval: 2,
+                    ..Default::default()
+                },
+                true,
+            )?;
+            ctx.normal_sync(&mut col2).await;
+        }
+        // Desktop reconnects again to pull Android's review.
+        {
+            let mut col1 = ctx.col1();
+            ctx.normal_sync(&mut col1).await;
+        }
+
+        // --- Reconciliation: nothing lost, nothing double-counted, on either
+        // device. ---
+        let mut col1 = ctx.col1();
+        let mut col2 = ctx.col2();
+        assert_reconciled(&mut col1, question_nid, question_cid, flashcard_cid)?;
+        assert_reconciled(&mut col2, question_nid, question_cid, flashcard_cid)?;
+
+        // Whole-object equality across the two devices.
+        assert_eq!(
+            col1.storage.get_note(question_nid)?.unwrap(),
+            col2.storage.get_note(question_nid)?.unwrap(),
+        );
+        assert_eq!(
+            col1.storage.get_note(flashcard_nid)?.unwrap(),
+            col2.storage.get_note(flashcard_nid)?.unwrap(),
+        );
+        assert_eq!(
+            col1.storage.get_card(flashcard_cid)?.unwrap(),
+            col2.storage.get_card(flashcard_cid)?.unwrap(),
+        );
+        assert_eq!(
+            col1.storage.get_revlog_entry(RevlogId(1001))?,
+            col2.storage.get_revlog_entry(RevlogId(1001))?,
+        );
+        assert_eq!(
+            col1.storage.get_revlog_entry(RevlogId(1002))?,
+            col2.storage.get_revlog_entry(RevlogId(1002))?,
+        );
+        assert_eq!(
+            col1.storage
+                .db_scalar::<u32>("select count() from revlog")?,
+            col2.storage
+                .db_scalar::<u32>("select count() from revlog")?,
+            "both devices agree on the total review count"
+        );
+
+        // Collections stay integrity-clean after the reconciliation.
+        col1.check_database()?;
+        col2.check_database()?;
+        Ok(())
+    })
+    .await
+}
+
 #[tokio::test]
 async fn sanity_check_should_roll_back_and_force_full_sync() -> Result<()> {
     with_active_server(|client| async move {
@@ -570,6 +726,40 @@ async fn upload_download(ctx: &SyncTestContext) -> Result<()> {
     // fetch so we're in sync
     ctx.full_download(col2).await;
 
+    Ok(())
+}
+
+// Speedrun sync assertions
+/////////////////////
+
+/// Assert the post-reconciliation invariants for
+/// [`speedrun_state_syncs_across_devices_offline`] on a single device: both
+/// offline reviews of the same card survive (none lost, none double-counted),
+/// the gated activation propagated, and the miss-reason tag propagated.
+fn assert_reconciled(
+    col: &mut Collection,
+    question_nid: NoteId,
+    question_cid: CardId,
+    flashcard_cid: CardId,
+) -> Result<()> {
+    let reviews = col.storage.db_scalar::<u32>(&format!(
+        "select count() from revlog where cid={}",
+        question_cid.0
+    ))?;
+    assert_eq!(
+        reviews, 2,
+        "both offline reviews of the same card must survive exactly once"
+    );
+    assert_ne!(
+        col.storage.get_card(flashcard_cid)?.unwrap().queue,
+        CardQueue::Suspended,
+        "gated activation must propagate across devices"
+    );
+    let q = col.storage.get_note(question_nid)?.unwrap();
+    assert!(
+        q.tags.iter().any(|t| t == "miss::knowledge-gap"),
+        "miss-reason tag must propagate across devices"
+    );
     Ok(())
 }
 

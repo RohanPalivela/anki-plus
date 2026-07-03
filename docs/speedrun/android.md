@@ -259,8 +259,10 @@ so a lagging port never blocks the desktop track.
 - **TLS**: desktop Linux wheels use `rustls`; verify AnkiDroid's build selects
   the intended TLS feature (`rustls` vs `native-tls`, see `rslib/Cargo.toml`
   features) for the Android target.
-- **Sync**: two-way offline reconcile + Android score UI is M2 2c, not this
-  phase. M1 1c only needs a reviewing build.
+- **Sync**: two-way offline reconcile is verified against the shared Rust sync
+  path (see [`sync.md`](sync.md) — test
+  `speedrun_state_syncs_across_devices_offline`, plus the conflict rule). The
+  Android **score UI** is still M2 2c. M1 1c only needs a reviewing build.
 
 ---
 
