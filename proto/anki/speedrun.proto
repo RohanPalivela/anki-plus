@@ -27,6 +27,23 @@ service SpeedrunService {
   // Returns per-topic FSRS mastery plus an overall point estimate, an
   // uncertainty range, coverage, and an explicit abstention flag.
   rpc GetMemoryScore(GetMemoryScoreRequest) returns (MemoryScoreResponse);
+  // Returns the Performance model: a 2PL-IRT (with guessing floor) estimate of
+  // P(correct on a representative new question), its range (from the ability
+  // standard error), coverage, an abstention flag, and a per-topic breakdown.
+  rpc GetPerformanceScore(GetPerformanceScoreRequest)
+      returns (PerformanceScoreResponse);
+  // Returns the Readiness model: a Monte-Carlo projected MCAT scaled score
+  // (472..528) with an 80% interval, coverage, confidence, abstention, and the
+  // top reasons behind the number.
+  rpc GetReadinessScore(GetReadinessScoreRequest)
+      returns (ReadinessScoreResponse);
+  // DEV/TEST ONLY: fabricate deterministic synthetic practice responses for a
+  // chosen true ability so the Performance/Readiness models can be exercised on
+  // a collection with no real history. It flips a config flag so every surfaced
+  // score is labelled `synthetic` — synthetic data is never allowed to look like
+  // real progress. Not part of the normal study loop.
+  rpc SeedSyntheticResponses(SeedSyntheticResponsesRequest)
+      returns (SeedSyntheticResponsesResponse);
 }
 
 // Required pairing for service auto-discovery (get_services). May stay empty;
@@ -96,4 +113,100 @@ message MemoryScoreResponse {
   uint32 graded_count = 6;
   // True when below the data threshold (D-6): no honest score is emitted.
   bool abstained = 7;
+}
+
+// -- Performance model (M3a) --------------------------------------------------
+
+message GetPerformanceScoreRequest {
+  // Reserved for future scoping. Empty == whole collection.
+}
+
+message TopicPerformance {
+  // Topic name (suffix after the `topic::` tag prefix).
+  string topic = 1;
+  // Predicted P(correct) on a representative new question of this topic, given
+  // the fitted ability and the topic's mastery (0..1, >= the guessing floor).
+  float p_correct = 2;
+  // Graded served-question responses recorded for this topic.
+  uint32 response_count = 3;
+  // False when there is no graded response data for this topic.
+  bool known = 4;
+}
+
+message PerformanceScoreResponse {
+  repeated TopicPerformance topics = 1;
+  // Blueprint-weighted P(correct on a representative new question) (0..1).
+  float overall = 2;
+  // 80% interval bounds (0..1), derived from the ability standard error.
+  float range_low = 3;
+  float range_high = 4;
+  // Fraction of blueprint topics with graded response data (0..1).
+  float coverage = 5;
+  // Total graded served-question responses used to fit the ability.
+  uint32 graded_count = 6;
+  // True when below the data threshold: no honest score is emitted.
+  bool abstained = 7;
+  // Estimated student ability on the logit scale (2PL theta).
+  float theta = 8;
+  // Standard error of the ability estimate (widens the interval on thin data).
+  float theta_se = 9;
+  // True when the collection has been seeded with clearly-labelled synthetic
+  // responses, so any surfaced score must be shown as synthetic (never silent).
+  bool synthetic = 10;
+}
+
+// -- Readiness model (M3b) ----------------------------------------------------
+
+message GetReadinessScoreRequest {
+  // Reserved for future scoping. Empty == whole collection.
+}
+
+message ReadinessTopic {
+  string topic = 1;
+  // Projected P(correct) used for this topic in the simulation (0..1).
+  float p_correct = 2;
+  // Blueprint weight of this topic (relative magnitude).
+  float weight = 3;
+  // False when the topic is uncovered (a low prior mastery was used).
+  bool known = 4;
+}
+
+message ReadinessScoreResponse {
+  // Projected MCAT scaled score (472..528): Monte-Carlo median.
+  float scaled_median = 1;
+  // 80% interval bounds on the scaled score.
+  float scaled_low = 2;
+  float scaled_high = 3;
+  // Median raw proportion correct (0..1), for transparency.
+  float raw_median = 4;
+  // Fraction of blueprint topics that have been exercised by questions (0..1).
+  float coverage = 5;
+  // Confidence 0..1, tied to coverage and interval width.
+  float confidence = 6;
+  // Total graded served-question responses behind the projection.
+  uint32 graded_count = 7;
+  // True when below data/coverage thresholds or the interval is too wide.
+  bool abstained = 8;
+  // True when synthetic seed data is included (labelled, never silent).
+  bool synthetic = 9;
+  repeated ReadinessTopic topics = 10;
+  // Short diagnostic phrases explaining the score/abstention.
+  repeated string top_reasons = 11;
+}
+
+// -- Synthetic seeding (dev/test helper) --------------------------------------
+
+message SeedSyntheticResponsesRequest {
+  // Fabricated responses per served question. 0 => configured/engine default.
+  uint32 responses_per_question = 1;
+  // Fabricated true ability on the logit scale (outcomes sampled from the 2PL).
+  double true_theta = 2;
+  // PRNG seed. 0 => engine default (still deterministic).
+  uint64 seed = 3;
+}
+
+message SeedSyntheticResponsesResponse {
+  collection.OpChanges changes = 1;
+  // Number of synthetic revlog entries added.
+  uint32 added = 2;
 }

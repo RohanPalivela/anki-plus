@@ -51,6 +51,9 @@ if TYPE_CHECKING:
 MissReason = speedrun_pb2.MissReason
 ActivateCardsResponse = speedrun_pb2.ActivateCardsResponse
 MemoryScoreResponse = speedrun_pb2.MemoryScoreResponse
+PerformanceScoreResponse = speedrun_pb2.PerformanceScoreResponse
+ReadinessScoreResponse = speedrun_pb2.ReadinessScoreResponse
+SeedSyntheticResponsesResponse = speedrun_pb2.SeedSyntheticResponsesResponse
 
 # Tag prefix for the latest miss reason on a question note (D-11).
 MISS_TAG_PREFIX = "miss::"
@@ -731,6 +734,42 @@ class Speedrun:
         """Per-topic FSRS mastery + overall point estimate, range, coverage, and
         an explicit abstention flag."""
         return self.col._backend.get_memory_score()
+
+    def get_performance_score(self) -> PerformanceScoreResponse:
+        """2PL-IRT P(correct on a representative new question): point estimate,
+        range (from the ability standard error), coverage, per-topic breakdown,
+        the fitted ability (theta) + its SE, an abstention flag, and a
+        ``synthetic`` flag when synthetic seed data is included."""
+        return self.col._backend.get_performance_score()
+
+    def get_readiness_score(self) -> ReadinessScoreResponse:
+        """Monte-Carlo projected MCAT scaled score (472–528): median + 80%
+        interval, coverage, confidence, graded count, abstention, top reasons,
+        and a ``synthetic`` flag when synthetic seed data is included."""
+        return self.col._backend.get_readiness_score()
+
+    def seed_synthetic_responses(
+        self,
+        *,
+        responses_per_question: int = 0,
+        true_theta: float = 0.0,
+        seed: int = 0,
+    ) -> SeedSyntheticResponsesResponse:
+        """DEV/TEST ONLY: fabricate deterministic synthetic practice responses so
+        the Performance/Readiness models can be exercised on a collection with no
+        real history (e.g. to demonstrate "beats chance").
+
+        This is gated, never silent: it flips a collection flag so every surfaced
+        Performance/Readiness score is labelled ``synthetic`` on all clients. It
+        is atomic + undoable and only adds ``revlog`` rows — it never alters FSRS
+        state, scheduling, or content. Zero arguments use the engine defaults
+        (still deterministic). Do not call this in a normal user's flow.
+        """
+        return self.col._backend.seed_synthetic_responses(
+            responses_per_question=responses_per_question,
+            true_theta=true_theta,
+            seed=seed,
+        )
 
     # Miss-reason flow
     ##########################################################################

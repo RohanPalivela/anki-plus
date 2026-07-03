@@ -742,6 +742,148 @@ def test_memory_dashboard_populated_after_reviews():
     assert masteries[0] < masteries[-1]
 
 
+# Performance + Readiness models (M3) — 2PL-IRT + Monte-Carlo readiness
+##############################################################################
+
+_BLUEPRINT_TOPICS = [
+    "biochemistry",
+    "biology",
+    "general-chemistry",
+    "organic-chemistry",
+    "physics",
+    "psychology",
+    "sociology",
+]
+
+
+def _served_bank_across_topics(per_topic=3) -> list[dict]:
+    """Served questions spread across every blueprint topic (so coverage is
+    full) with a spread of difficulties, for the Performance/Readiness models."""
+    base = _sample_bank()[0]
+    out: list[dict] = []
+    for t in _BLUEPRINT_TOPICS:
+        for i in range(per_topic):
+            out.append(
+                {
+                    **base,
+                    "uid": f"m3-{t}-{i}",
+                    "topics": [t],
+                    "pool": "served",
+                    "difficulty_b": round(-1.0 + 0.5 * i, 2),
+                    "discrimination_a": 1.0,
+                }
+            )
+    return out
+
+
+def test_performance_score_abstains_then_beats_chance_with_synthetic_seed():
+    """The Performance RPC abstains on no data, and once synthetic seed
+    responses are added it scores above chance and is honestly labelled
+    synthetic (the gate: synthetic data is never silent)."""
+    col = getEmptyCol()
+    col.speedrun.setup_mcat()
+
+    # Fresh collection: no responses -> abstain, not synthetic.
+    perf = col.speedrun.get_performance_score()
+    assert perf.abstained
+    assert not perf.synthetic
+    assert perf.graded_count == 0
+
+    col.speedrun.import_question_bank(questions=_served_bank_across_topics())
+    added = col.speedrun.seed_synthetic_responses(
+        responses_per_question=4, true_theta=1.5, seed=123
+    )
+    assert added.added > 0
+
+    perf = col.speedrun.get_performance_score()
+    # Gated + labelled: any surfaced score reports synthetic == True.
+    assert perf.synthetic
+    assert not perf.abstained
+    # Beats chance (4-option guessing floor is 0.25).
+    assert perf.overall > 0.4
+    # Honest interval brackets the point estimate within [0, 1].
+    assert 0.0 <= perf.range_low <= perf.overall <= perf.range_high <= 1.0
+    # A +1.5 true ability recovers a positive theta.
+    assert perf.theta > 0.0
+    # Per-topic breakdown covers the whole blueprint.
+    assert len(perf.topics) >= len(_BLUEPRINT_TOPICS)
+
+
+def test_readiness_score_abstains_then_projects_scaled_score():
+    """The Readiness RPC abstains on thin data and, once seeded with full
+    coverage, emits a deterministic MCAT-scaled median + ordered 80% interval."""
+    col = getEmptyCol()
+    col.speedrun.setup_mcat()
+
+    assert col.speedrun.get_readiness_score().abstained
+
+    col.speedrun.import_question_bank(questions=_served_bank_across_topics(per_topic=3))
+    col.speedrun.seed_synthetic_responses(
+        responses_per_question=6, true_theta=1.5, seed=7
+    )
+
+    readiness = col.speedrun.get_readiness_score()
+    assert readiness.synthetic
+    assert not readiness.abstained
+    # Scaled score sits inside the MCAT range with an ordered interval.
+    assert 472.0 <= readiness.scaled_low <= readiness.scaled_median
+    assert readiness.scaled_median <= readiness.scaled_high <= 528.0
+    # Coverage is full (all blueprint topics exercised) and confidence positive.
+    assert readiness.coverage > 0.9
+    assert readiness.confidence > 0.0
+    # Fixed seed -> reproducible projection on a re-fetch.
+    again = col.speedrun.get_readiness_score()
+    assert again.scaled_median == readiness.scaled_median
+    assert list(again.top_reasons) == list(readiness.top_reasons)
+
+
+def test_readiness_abstains_on_low_coverage_even_with_data():
+    """Even with plenty of responses, Readiness abstains when only a couple of
+    blueprint topics have been exercised (coverage below the threshold)."""
+    col = getEmptyCol()
+    col.speedrun.setup_mcat()
+    # Questions in only two of seven blueprint topics -> ~0.29 coverage.
+    base = _sample_bank()[0]
+    narrow = [
+        {
+            **base,
+            "uid": f"narrow-{t}-{i}",
+            "topics": [t],
+            "pool": "served",
+            "difficulty_b": 0.0,
+            "discrimination_a": 1.0,
+        }
+        for t in ("biology", "physics")
+        for i in range(4)
+    ]
+    col.speedrun.import_question_bank(questions=narrow)
+    col.speedrun.seed_synthetic_responses(
+        responses_per_question=6, true_theta=1.5, seed=99
+    )
+    readiness = col.speedrun.get_readiness_score()
+    assert readiness.abstained  # low coverage triggers the give-up rule
+    assert readiness.coverage < 0.5
+
+
+def test_seed_synthetic_responses_is_undoable_and_gated():
+    """The synthetic seeder only adds revlog rows, flips the synthetic flag, and
+    is undoable — it never leaks into a real (unseeded) score silently."""
+    col = getEmptyCol()
+    col.speedrun.setup_mcat()
+    col.speedrun.import_question_bank(questions=_served_bank_across_topics(per_topic=2))
+
+    revlog_before = col.db.scalar("select count() from revlog")
+    added = col.speedrun.seed_synthetic_responses(
+        responses_per_question=3, true_theta=1.0, seed=5
+    )
+    assert added.added > 0
+    assert col.db.scalar("select count() from revlog") == revlog_before + added.added
+    # A separate, never-seeded collection reports synthetic == False (no leak).
+    other = getEmptyCol()
+    other.speedrun.setup_mcat()
+    assert not other.speedrun.get_performance_score().synthetic
+
+
 # Recap: same-material (concept-scoped) selection + transfer scoring scaffold
 ##############################################################################
 

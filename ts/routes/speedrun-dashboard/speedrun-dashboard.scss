@@ -85,7 +85,9 @@
         }
     }
 
-    .memory {
+    .memory,
+    .performance,
+    .readiness {
         grid-column: span 1;
 
         .headline {
@@ -205,16 +207,41 @@
             color: var(--fg-subtle);
             margin-top: 2px;
         }
-    }
 
-    .placeholder {
-        .coming-soon {
-            color: var(--fg-subtle);
-            font-style: italic;
-            padding: 28px 0;
-            text-align: center;
-            border: 1px dashed var(--border-subtle);
-            border-radius: 8px;
+        // Honest, prominent label so a synthetic-seeded score is never mistaken
+        // for real progress (gated: only appears when the collection was seeded).
+        .synthetic-badge {
+            display: inline-block;
+            background: hsl(280, 55%, 48%);
+            color: white;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            padding: 3px 9px;
+            border-radius: 999px;
+            margin-bottom: 8px;
+        }
+
+        .reasons {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+
+            .reason {
+                font-size: 13px;
+                color: var(--fg-subtle);
+                padding-left: 14px;
+                position: relative;
+
+                &::before {
+                    content: "•";
+                    position: absolute;
+                    left: 2px;
+                }
+            }
         }
     }
 

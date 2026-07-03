@@ -7,6 +7,9 @@
 speedrun-activate-for-miss = Activate Cards for Miss
 # Undo entry shown after a coverage sweep re-activates cards across topics.
 speedrun-coverage-sweep = Coverage Sweep
+# Undo entry shown after seeding deterministic synthetic practice responses
+# (a clearly-labelled dev/test helper; never real progress).
+speedrun-seed-synthetic-responses = Seed Synthetic Responses
 
 ## Menu (Tools).
 
@@ -88,10 +91,10 @@ speedrun-miss-no-activation = no activation
 
 ## Memory dashboard (three-score layout).
 
-speedrun-dashboard-title = Speedrun — Memory dashboard
+speedrun-dashboard-title = Speedrun — Score dashboard
 speedrun-dashboard-subtitle =
-    Honest, evidence-backed scores. Memory is live (M1); Performance and
-    Readiness arrive in M3.
+    Honest, evidence-backed scores. Every number shows a range and abstains when
+    the data is too thin.
 speedrun-dashboard-memory = Memory
 speedrun-dashboard-performance = Performance
 speedrun-dashboard-readiness = Readiness
@@ -109,6 +112,34 @@ speedrun-dashboard-topic-cards = { $count } card(s)
 speedrun-dashboard-empty =
     Nothing to show yet. Set up Speedrun and study some questions first.
 speedrun-dashboard-refresh = Refresh
+
+## Performance meter (2PL-IRT: P(correct on a new question)).
+
+speedrun-dashboard-performance-headline = Chance of a correct answer
+speedrun-dashboard-performance-overall = P(correct) on a new question
+speedrun-dashboard-performance-ability = Ability (θ)
+speedrun-dashboard-performance-per-topic = Per-topic P(correct)
+speedrun-dashboard-performance-responses = { $count } response(s)
+speedrun-dashboard-performance-abstaining-hint =
+    A score is shown once you've answered enough questions across enough topics.
+
+## Readiness meter (projected MCAT score).
+
+speedrun-dashboard-readiness-headline = Projected MCAT score
+speedrun-dashboard-readiness-interval = 80% range
+speedrun-dashboard-readiness-raw = Raw correct
+speedrun-dashboard-readiness-confidence = Confidence
+speedrun-dashboard-readiness-reasons = What's driving this
+speedrun-dashboard-readiness-abstaining-hint =
+    A projection is shown once coverage and answer counts are high enough and the
+    range is tight enough to be meaningful.
+
+## Synthetic seed data (dev/test) — always labelled, never silent.
+
+speedrun-synthetic-badge = Synthetic data
+speedrun-synthetic-hint =
+    This score includes synthetic seed responses (a dev/test helper), not real
+    study progress.
 # Destructive action: wipe the learner's progress but keep imported content.
 speedrun-reset-profile-action = Reset profile
 speedrun-reset-profile-confirm =

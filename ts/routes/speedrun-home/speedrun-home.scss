@@ -118,6 +118,71 @@
         }
     }
 
+    .score-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        width: 100%;
+
+        .snapshot-card {
+            background: var(--canvas-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: 14px;
+            padding: 14px 16px;
+
+            &.muted .score-line {
+                opacity: 0.55;
+            }
+
+            .snapshot-head {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+
+                .label {
+                    font-size: 13px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                    color: var(--fg-subtle);
+                }
+
+                .synthetic {
+                    background: hsl(280, 55%, 48%);
+                    color: white;
+                    font-weight: 700;
+                    font-size: 10px;
+                    padding: 2px 6px;
+                    border-radius: 999px;
+                }
+            }
+
+            .score-line {
+                display: flex;
+                align-items: baseline;
+                gap: 8px;
+                margin: 6px 0 8px;
+
+                .big-number {
+                    font-size: 34px;
+                    font-weight: 800;
+                    line-height: 1;
+                }
+
+                .big-label {
+                    font-size: 13px;
+                    color: var(--fg-subtle);
+                }
+            }
+
+            .range {
+                font-size: 14px;
+                font-weight: 600;
+                color: var(--fg-subtle);
+            }
+        }
+    }
+
     .start {
         width: 100%;
         border: none;

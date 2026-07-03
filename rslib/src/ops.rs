@@ -36,6 +36,7 @@ pub enum Op {
     // Speedrun (MCAT fork) engine operations.
     ActivateForMiss,
     CoverageSweep,
+    SeedSyntheticResponses,
     SetFlag,
     SortCards,
     Suspend,
@@ -103,6 +104,7 @@ impl Op {
             Op::ImageOcclusion => tr.notetypes_image_occlusion_name(),
             Op::ActivateForMiss => tr.speedrun_activate_for_miss(),
             Op::CoverageSweep => tr.speedrun_coverage_sweep(),
+            Op::SeedSyntheticResponses => tr.speedrun_seed_synthetic_responses(),
         }
         .into()
     }

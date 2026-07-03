@@ -24,8 +24,12 @@ pub(crate) mod activation;
 pub(crate) mod blueprint;
 pub(crate) mod linkage;
 pub(crate) mod mastery;
+pub(crate) mod performance;
+pub(crate) mod readiness;
+pub(crate) mod rng;
 pub(crate) mod service;
 pub(crate) mod sweep;
+pub(crate) mod synthetic;
 pub(crate) mod value_order;
 
 /// Tag prefix marking a blueprint topic that a note (question or flashcard)
@@ -43,6 +47,21 @@ pub(crate) const QUESTION_NOTETYPE_NAME: &str = "SpeedrunQuestion";
 /// Optional tag prefix on a question note pointing at a specific flashcard note
 /// id it can activate, for when shared-topic linkage is too coarse (D-2a).
 pub(crate) const GATES_TAG_PREFIX: &str = "gates::";
+
+/// Tag marking a served practice question (the only pool ever served to the
+/// student). Mirrors `anki.speedrun.POOL_SERVED_TAG`. The Performance and
+/// Readiness models fit ability from responses on these questions.
+pub(crate) const POOL_SERVED_TAG: &str = "pool::served";
+
+/// Tag marking a held-out practice question (kept for evaluation, never served
+/// and never fitted on). Mirrors `anki.speedrun.POOL_HELDOUT_TAG`.
+pub(crate) const POOL_HELDOUT_TAG: &str = "pool::heldout";
+
+/// Config flag set once a collection has been seeded with synthetic practice
+/// responses (see [`synthetic`]). The Performance/Readiness responses echo it as
+/// `synthetic = true` so a surfaced score is always labelled — synthetic data is
+/// never allowed to masquerade as real progress. camelCase to match siblings.
+pub(crate) const SYNTHETIC_SEEDED_CONFIG_KEY: &str = "speedrunSyntheticSeeded";
 
 /// Why a practice question was missed. Mirrors the protobuf `MissReason`, but
 /// kept as a plain Rust enum so the core gating logic and its tests don't

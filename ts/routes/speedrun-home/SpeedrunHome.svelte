@@ -3,7 +3,11 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <script lang="ts">
-    import type { MemoryScoreResponse } from "@generated/anki/speedrun_pb";
+    import type {
+        MemoryScoreResponse,
+        PerformanceScoreResponse,
+        ReadinessScoreResponse,
+    } from "@generated/anki/speedrun_pb";
     import * as tr from "@generated/ftl";
     import { bridgeCommand } from "@tslib/bridgecommand";
 
@@ -13,16 +17,24 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import "./speedrun-home.scss";
 
     export let score: MemoryScoreResponse;
+    export let performance: PerformanceScoreResponse | null = null;
+    export let readiness: ReadinessScoreResponse | null = null;
     export let curriculum: Curriculum | null = null;
 
     function pct(value: number): string {
         return `${Math.round(value * 100)}%`;
     }
 
+    function scaled(value: number): string {
+        return `${Math.round(value)}`;
+    }
+
     // While abstaining (too little data / coverage), the derived percentages are
     // unreliable, so show placeholders instead of misleading numbers. The raw
     // graded-card count stays, as honest progress toward a real score.
     $: showScore = !score.abstained;
+    $: showPerf = performance != null && !performance.abstained;
+    $: showReadiness = readiness != null && !readiness.abstained;
     $: topics = curriculum?.topics ?? [];
     $: hasCurriculum = topics.length > 0;
 
@@ -105,6 +117,66 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             </div>
         </div>
     </section>
+
+    <div class="score-row">
+        {#if performance}
+            <section
+                class="snapshot-card"
+                class:muted={performance.abstained}
+            >
+                <div class="snapshot-head">
+                    <span class="label">{tr.speedrunDashboardPerformance()}</span>
+                    {#if performance.synthetic}
+                        <span class="synthetic" title={tr.speedrunSyntheticHint()}>
+                            {tr.speedrunSyntheticBadge()}
+                        </span>
+                    {/if}
+                </div>
+                <div class="score-line">
+                    <span class="big-number">
+                        {showPerf ? pct(performance.overall) : "—"}
+                    </span>
+                    <span class="big-label">
+                        {tr.speedrunDashboardPerformanceOverall()}
+                    </span>
+                </div>
+                <div class="mini-value range">
+                    {showPerf
+                        ? `${pct(performance.rangeLow)} – ${pct(performance.rangeHigh)}`
+                        : tr.speedrunDashboardAbstaining()}
+                </div>
+            </section>
+        {/if}
+
+        {#if readiness}
+            <section
+                class="snapshot-card"
+                class:muted={readiness.abstained}
+            >
+                <div class="snapshot-head">
+                    <span class="label">{tr.speedrunDashboardReadiness()}</span>
+                    {#if readiness.synthetic}
+                        <span class="synthetic" title={tr.speedrunSyntheticHint()}>
+                            {tr.speedrunSyntheticBadge()}
+                        </span>
+                    {/if}
+                </div>
+                <div class="score-line">
+                    <span class="big-number">
+                        {showReadiness ? scaled(readiness.scaledMedian) : "—"}
+                    </span>
+                    <span class="big-label">
+                        {tr.speedrunDashboardReadinessHeadline()}
+                    </span>
+                </div>
+                <div class="mini-value range">
+                    {showReadiness
+                        ? `${scaled(readiness.scaledLow)} – ${scaled(readiness.scaledHigh)}`
+                        : tr.speedrunDashboardAbstaining()}
+                </div>
+            </section>
+        {/if}
+    </div>
 
     <button class="start" on:click={start}>
         <span class="start-label">{tr.speedrunHomeStart()}</span>

@@ -9,4 +9,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     export let data: PageData;
 </script>
 
-<SpeedrunHome score={data.score} />
+<SpeedrunHome
+    score={data.score}
+    performance={data.performance}
+    readiness={data.readiness}
+    curriculum={data.curriculum}
+/>

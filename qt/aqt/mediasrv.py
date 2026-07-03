@@ -827,6 +827,8 @@ exposed_backend_list = [
     "get_retention_workload",
     # SpeedrunService
     "get_memory_score",
+    "get_performance_score",
+    "get_readiness_score",
 ]
 
 
@@ -895,9 +897,11 @@ def _check_dynamic_request_permissions():
         "/_anki/i18nResources",
         "/_anki/congratsInfo",
         # Speedrun (MCAT) home renders in the main webview (mw.web), which has no
-        # API access; its read-only Memory snapshot must be whitelisted like
-        # congratsInfo so the home can load without the Bearer token.
+        # API access; its read-only score snapshots must be whitelisted like
+        # congratsInfo so the home/dashboard can load without the Bearer token.
         "/_anki/getMemoryScore",
+        "/_anki/getPerformanceScore",
+        "/_anki/getReadinessScore",
         # Curriculum view (read) + the small scope-for-next-session write; both
         # are fork-internal and the scope write validates its input against the
         # collection's own content (see speedrun_set_scope).

@@ -50,6 +50,50 @@ impl crate::services::SpeedrunService for Collection {
     ) -> Result<speedrun::MemoryScoreResponse> {
         self.speedrun_memory_score()
     }
+
+    fn get_performance_score(
+        &mut self,
+        _input: speedrun::GetPerformanceScoreRequest,
+    ) -> Result<speedrun::PerformanceScoreResponse> {
+        self.speedrun_performance_score()
+    }
+
+    fn get_readiness_score(
+        &mut self,
+        _input: speedrun::GetReadinessScoreRequest,
+    ) -> Result<speedrun::ReadinessScoreResponse> {
+        self.speedrun_readiness_score()
+    }
+
+    fn seed_synthetic_responses(
+        &mut self,
+        input: speedrun::SeedSyntheticResponsesRequest,
+    ) -> Result<speedrun::SeedSyntheticResponsesResponse> {
+        use crate::speedrun::synthetic::DEFAULT_SYNTHETIC_RESPONSES_PER_QUESTION;
+        use crate::speedrun::synthetic::DEFAULT_SYNTHETIC_SEED;
+        use crate::speedrun::synthetic::DEFAULT_SYNTHETIC_TRUE_THETA;
+
+        let per_q = if input.responses_per_question == 0 {
+            DEFAULT_SYNTHETIC_RESPONSES_PER_QUESTION
+        } else {
+            input.responses_per_question
+        };
+        let true_theta = if input.true_theta == 0.0 {
+            DEFAULT_SYNTHETIC_TRUE_THETA
+        } else {
+            input.true_theta
+        };
+        let seed = if input.seed == 0 {
+            DEFAULT_SYNTHETIC_SEED
+        } else {
+            input.seed
+        };
+        let out = self.speedrun_seed_synthetic_responses(per_q, true_theta, seed)?;
+        Ok(speedrun::SeedSyntheticResponsesResponse {
+            changes: Some(out.changes.into()),
+            added: out.output as u32,
+        })
+    }
 }
 
 impl Collection {
