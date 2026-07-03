@@ -62,6 +62,21 @@ config), so it all syncs for free between desktop and Android.
 - Each score shows an uncertainty range and **abstains** when the data is too
   thin, and is labelled `synthetic` if any dev/test seed data is included.
 
+**How the ranges are computed.** Every score reports an 80% band (two-sided 80%
+normal quantile, `z ≈ 1.28`), derived per model so the width reflects real
+evidence rather than decoration:
+
+- _Memory_ — a normal approximation on the mastery proportion,
+  `p ± z·√(p(1−p)/n)` over `n` graded cards, so the band widens as the sample
+  shrinks (and is fully wide `0–1` with no data).
+- _Performance_ — the fitted ability `θ` carries a standard error from its
+  Fisher information (responses + prior); the band is `P(correct)` re-evaluated
+  at `θ ± z·SE`, so ability uncertainty propagates through the 2PL curve.
+- _Readiness_ — a **fixed-seed** Monte-Carlo projects many exam outcomes; the
+  band is the 10th–90th percentile of that distribution, and uncovered blueprint
+  topics inject per-simulation variance so thin coverage both lowers the score
+  and widens the interval.
+
 **Learner experience**
 
 - **Curriculum home** (topic → concept) and a **guided session**
@@ -121,8 +136,10 @@ in Rust, so a reworded copy never double-counts a fact's retention.
 
 ### Checked before students see anything
 
-`tools/speedrun/rephrase_eval.py` runs an **offline evaluation** on a vendored
-gold set before anything is shown:
+In short: nothing is written or shown until it clears an **offline, deterministic
+quality gate** — no live model call decides quality.
+`tools/speedrun/rephrase_eval.py` runs this evaluation on a vendored gold set
+before anything reaches a student:
 
 - A deterministic `HeuristicGrader` labels each variant
   **correct-and-useful / correct-but-bad-teaching / wrong** (answer preserved,
