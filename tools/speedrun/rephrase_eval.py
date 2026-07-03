@@ -39,6 +39,7 @@ import argparse
 import json
 import math
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -223,8 +224,16 @@ def evaluate(
     gold: dict[str, Any],
     *,
     min_quality: float = DEFAULT_MIN_QUALITY,
+    progress: Callable[[str], None] | None = None,
 ) -> EvalReport:
-    """Run the full eval and return an :class:`EvalReport` (pure; no I/O)."""
+    """Run the full eval and return an :class:`EvalReport`.
+
+    Pure by default (no I/O). Pass a ``progress`` callback to receive
+    human-readable status lines as each step runs — the CLI wires this to
+    stderr so a real (network-bound) OpenAI run shows it is making progress
+    instead of appearing to hang. Tests omit it and stay silent.
+    """
+    say = progress or (lambda _msg: None)
     questions = gold["questions"]
     heldout = gold.get("heldout_probe", [])
 
@@ -232,11 +241,13 @@ def evaluate(
     heldout_texts = [_item_text(h) for h in heldout]
     grader = HeuristicGrader(heldout_texts=heldout_texts)
 
+    total = len(questions)
+    say(f"Generating {total} variants (1 provider call each)…")
     variants: list[RephrasedQuestion] = []
     grades = []
     counts = {LABEL_CORRECT_USEFUL: 0, LABEL_WRONG: 0, LABEL_BAD_TEACHING: 0}
     gate_written = gate_blocked = 0
-    for item in questions:
+    for i, item in enumerate(questions, start=1):
         source = SourceQuestion.from_dict(item)
         variant = provider.rephrase(source)
         variants.append(variant)
@@ -248,15 +259,21 @@ def evaluate(
             gate_blocked += 1
         else:
             gate_written += 1
+        say(f"  [{i}/{total}] graded: {grade.label} (score {grade.score:.2f})")
+        # Surface WHY a variant failed so a real run shows whether the grader is
+        # catching genuine drift or the generator just needs a better contract.
+        if grade.label == LABEL_WRONG and grade.reasons:
+            say(f"       reasons: {'; '.join(grade.reasons)}")
 
-    total = len(questions)
     accuracy = counts[LABEL_CORRECT_USEFUL] / total if total else 0.0
     wrong_rate = counts[LABEL_WRONG] / total if total else 0.0
 
+    say("Computing TF-IDF baseline + AI same-concept rates…")
     baseline_rate, baseline_n = baseline_same_concept_rate(questions)
     ai_rate, _ = ai_same_concept_rate(questions, variants, grader)
 
     # Leakage: no heldout among inputs, no variant near-dup of a heldout item.
+    say("Running leakage + heldout-refusal checks…")
     variant_texts = [v.stem + " " + " ".join(v.options) for v in variants]
     leak = scan_leakage(questions, variant_texts, heldout)
 
@@ -265,6 +282,7 @@ def evaluate(
     refusal = scan_leakage(heldout, [], heldout)
     heldout_refused = bool(refusal.heldout_in_inputs) and not leak.heldout_in_inputs
 
+    say("Eval complete; building report.")
     return EvalReport(
         provider=getattr(provider, "name", provider.__class__.__name__),
         total=total,
@@ -367,11 +385,21 @@ def main() -> int:
         action="store_true",
         help="Emit the report as JSON instead of the text table.",
     )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress the per-step progress lines printed to stderr.",
+    )
     args = parser.parse_args()
 
     provider = build_provider(args)
     gold = load_gold()
-    report = evaluate(provider, gold, min_quality=args.min_quality)
+    # Progress goes to stderr so it never pollutes --json (stdout) output, and
+    # is shown by default so a network-bound OpenAI run visibly makes progress.
+    progress = (
+        None if args.quiet else lambda msg: print(msg, file=sys.stderr, flush=True)
+    )
+    report = evaluate(provider, gold, min_quality=args.min_quality, progress=progress)
 
     if args.json:
         print(

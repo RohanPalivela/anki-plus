@@ -18,6 +18,9 @@ speedrun-setup-action = Set up Speedrun (MCAT)…
 speedrun-study-action = Study (question-first)…
 speedrun-dashboard-action = Memory dashboard…
 speedrun-import-bank-action = Import question bank…
+# Checkable master switch for AI features (grounded rephrasal).
+speedrun-ai-enable-action = Enable AI rewording
+speedrun-ai-generate-cards-action = Generate AI flashcard variants…
 
 ## Setup.
 
@@ -202,3 +205,25 @@ speedrun-session-complete-detail =
     You answered { $answeredCount } question(s) ({ $correctCount } correct) and
     reviewed { $reviewedCount } memory card(s).
 speedrun-session-complete-topics = Topics studied: { $topics }.
+
+## AI rewording (grounded flashcard / question variants; opt-in, off by default).
+
+speedrun-ai-enabled-on =
+    AI rewording enabled. Grounded, source-checked variants only; the app still
+    scores with AI off.
+speedrun-ai-enabled-off = AI rewording disabled.
+speedrun-ai-disabled-body =
+    Turn on Tools → Speedrun (MCAT) → Enable AI rewording first.
+speedrun-ai-unavailable-body =
+    To use AI features, set the OPENAI_API_KEY environment variable and install
+    the “openai” package (pip install openai), then restart Anki. Runs offline
+    with AI off.
+speedrun-ai-no-sources =
+    No first-principles memory cards found to reword. Import the question bank
+    first.
+speedrun-ai-generate-running = Generating AI flashcard variants…
+speedrun-ai-generate-complete =
+    Wrote { $writtenCount } reworded flashcard variant(s) from { $consideredCount }
+    source card(s); { $blockedCount } candidate(s) blocked by the quality gate.
+    Variants are suspended, sync like their source, and are excluded from the
+    Memory score.

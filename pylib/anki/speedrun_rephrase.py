@@ -256,18 +256,25 @@ def _safe_float(value: Any, default: float) -> float:
 
 REPHRASE_SYSTEM_PROMPT = (
     "You are an expert MCAT item writer. You rewrite one single-best-answer "
-    "multiple-choice question into a NEW variant that tests the exact same "
-    "concept and has the same correct answer.\n"
+    "multiple-choice question into a NEW variant that tests the EXACT same "
+    "concept and keeps the SAME correct answer.\n"
+    "Where the rewording goes: the STEM changes, the ANSWER SPACE does not.\n"
     "Strict rules:\n"
-    "1. Reword the stem and every option in fresh language; do not copy the "
-    "original wording verbatim.\n"
-    "2. Preserve the underlying fact: the correct option must mean the same "
-    "thing as the original correct option. Never change which fact is correct.\n"
-    "3. Keep exactly the same number of options, all plausible and mutually "
-    "exclusive, grounded ONLY in the concept of the source question. Do not "
-    "introduce facts absent from the source.\n"
-    "4. Write a concise explanation of why the correct answer is right.\n"
-    "5. Do not reference 'the original question' or 'the passage'. The variant "
+    "1. Substantially reword the STEM in fresh language — a new scenario, frame, "
+    "or phrasing for the same underlying question. Do not copy the original stem "
+    "verbatim.\n"
+    "2. KEEP THE SAME ANSWER CHOICES. Preserve every option's meaning and its "
+    "key identifying terms (technical names, values, units, chemical/anatomical "
+    "terms). You may lightly polish wording, but do NOT substitute new facts, do "
+    "NOT add or remove options, and do NOT introduce any answer that is not in "
+    "the source. Keeping the answer space fixed is what guarantees the variant "
+    "has the same correct answer and cannot drift to a different fact.\n"
+    "3. The correct choice must remain the SAME fact as the source's correct "
+    "option. Never change which choice is correct.\n"
+    "4. Keep exactly the same number of options.\n"
+    "5. Write a concise (1-2 sentence) explanation of why the correct answer is "
+    "right.\n"
+    "6. Do not reference 'the original question' or 'the passage'. The variant "
     "must stand alone.\n"
     'Respond with STRICT JSON only: {"stem": str, "options": [str, ...], '
     '"correct_index": int (0-based), "explanation": str}.'
@@ -319,7 +326,10 @@ class OpenAIProvider:
         *,
         model: str | None = None,
         api_key: str | None = None,
-        temperature: float = 0.7,
+        # Low temperature: this is a faithful rephrasal, not creative writing.
+        # Higher values let the model drift the correct fact or invent options
+        # absent from the source, which the grader (correctly) rejects as wrong.
+        temperature: float = 0.3,
     ) -> None:
         self.model = model or os.environ.get("OPENAI_MODEL") or DEFAULT_OPENAI_MODEL
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
@@ -368,6 +378,20 @@ class OpenAIProvider:
         )
         content = response.choices[0].message.content or "{}"
         return parse_provider_json(content, source)
+
+    def rephrase_card(self, source: SourceCard) -> RephrasedCard:
+        client = self._get_client()
+        response = client.chat.completions.create(
+            model=self.model,
+            temperature=self.temperature,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": CARD_REPHRASE_SYSTEM_PROMPT},
+                {"role": "user", "content": build_card_user_prompt(source)},
+            ],
+        )
+        content = response.choices[0].message.content or "{}"
+        return parse_card_provider_json(content, source)
 
 
 def parse_provider_json(content: str, source: SourceQuestion) -> RephrasedQuestion:
@@ -453,11 +477,38 @@ class MockProvider:
             source=source.source,
         )
 
+    def rephrase_card(self, source: SourceCard) -> RephrasedCard:
+        """Deterministic flashcard variant: reword the FRONT, preserve the BACK
+        fact verbatim (the strongest possible "fact preserved" signal). The
+        ``quality`` knob mirrors :meth:`rephrase` so tests can force the card
+        grader's wrong / bad-teaching verdicts.
+
+        * ``"good"`` — reworded front, fact-preserving back (default).
+        * ``"wrong"`` — replaces the back with a different fact (drift -> blocked).
+        * ``"verbatim"`` — copies the front unchanged; the fact survives but the
+          front is not rephrased (bad-teaching, filtered but not dangerous).
+        """
+        if self.quality == "wrong":
+            return RephrasedCard(
+                front=_mock_reword_front(source.front),
+                back="This is an unrelated, contradicting fact not present in the "
+                "source card.",
+            )
+        if self.quality == "verbatim":
+            return RephrasedCard(front=source.front, back=source.back)
+        return RephrasedCard(front=_mock_reword_front(source.front), back=source.back)
+
 
 def _mock_reword_stem(stem: str) -> str:
     """A deterministic, content-preserving reword used only by the mock."""
     s = stem.strip().rstrip("?.")
     return f"Consider the following MCAT scenario. {s}. Which single option is best?"
+
+
+def _mock_reword_front(front: str) -> str:
+    """Deterministic, content-preserving reword of a flashcard front."""
+    s = front.strip().rstrip("?.")
+    return f"Explain from first principles: {s}."
 
 
 # --- Grading -----------------------------------------------------------------
@@ -961,6 +1012,344 @@ def _heldout_texts(col: anki.collection.Collection) -> list[str]:
         note = col.get_note(nid)
         texts.append(str(note["stem"]) + " " + " ".join(option_lines(note["options"])))
     return texts
+
+
+# --- Flashcard rephrasal (first-principles memory cards) ---------------------
+#
+# The question path above rephrases single-best-answer MCQs. This path rephrases
+# the *memory flashcards* — the hand-authored first-principles Basic (Front/Back)
+# cards a missed question activates. A variant tests the SAME principle with a
+# reworded FRONT while preserving the BACK fact, so it is genuine "same material,
+# different phrasing" desirable-difficulty practice. Variants are written as
+# native suspended Basic notes (so they sync + gate like their source) but are
+# tagged AI-generated so the Rust Memory model excludes them (review-only:
+# a reworded copy of a fact must not double-count that fact's mastery).
+
+#: Min fraction of the source back's content tokens that must reappear in the
+#: variant back for the underlying fact to count as preserved. Recall-oriented
+#: (not Jaccard) so a faithful reword that *adds* words is not penalised, while a
+#: back that drops or swaps the facts falls below it and is blocked as wrong.
+_FACT_PRESERVED_COVERAGE = 0.5
+
+
+@dataclass
+class SourceCard:
+    """A first-principles memory card being rephrased (read-only provider input)."""
+
+    front: str
+    back: str
+    source: str
+    topics: list[str] = field(default_factory=list)
+    concept: str = ""
+    note_id: int | None = None
+
+    @classmethod
+    def from_dict(cls, fields: dict[str, Any]) -> SourceCard:
+        return cls(
+            front=str(fields.get("front", "")),
+            back=str(fields.get("back", "")),
+            source=str(fields.get("source", "")),
+            topics=list(fields.get("topics", []) or []),
+            concept=str(fields.get("concept", "")),
+            note_id=fields.get("note_id"),
+        )
+
+
+@dataclass
+class RephrasedCard:
+    """A generated flashcard variant returned by a :class:`CardProvider`."""
+
+    front: str
+    back: str
+
+
+CARD_REPHRASE_SYSTEM_PROMPT = (
+    "You are an expert MCAT tutor. You rewrite one first-principles flashcard "
+    "(a FRONT prompt and a BACK answer) into a NEW variant that tests the EXACT "
+    "same underlying fact/principle, worded differently.\n"
+    "Strict rules:\n"
+    "1. Substantially reword the FRONT in fresh language — a new phrasing, angle, "
+    "or mini-scenario that still asks for the same principle. Do not copy the "
+    "original front verbatim.\n"
+    "2. The BACK must state the SAME fact(s) as the source back. Preserve every "
+    "key term, value, unit, equation, and relationship. You may reword for "
+    "clarity, but do NOT add facts absent from the source, do NOT drop any of "
+    "its facts, and NEVER change or contradict what it says.\n"
+    "3. Keep it self-contained: do not reference 'the original card' or 'the "
+    "source'. The variant must stand alone.\n"
+    "4. Keep the back concise and genuinely explanatory (no one-word answers).\n"
+    'Respond with STRICT JSON only: {"front": str, "back": str}.'
+)
+
+
+def build_card_user_prompt(source: SourceCard) -> str:
+    """The per-card user prompt: the source card as compact JSON."""
+    payload = {
+        "front": source.front,
+        "back": source.back,
+        "concept": source.concept,
+        "topics": source.topics,
+    }
+    return (
+        "Rewrite this first-principles flashcard into one same-fact variant.\n"
+        + json.dumps(payload, ensure_ascii=False)
+    )
+
+
+@runtime_checkable
+class CardProvider(Protocol):
+    """A pluggable flashcard rephrasal backend. ``name`` is used in reports."""
+
+    name: str
+
+    def rephrase_card(self, source: SourceCard) -> RephrasedCard: ...
+
+
+def parse_card_provider_json(content: str, source: SourceCard) -> RephrasedCard:
+    """Parse a provider's JSON reply into a :class:`RephrasedCard`."""
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise RephraseError(f"provider returned non-JSON output: {exc}") from exc
+    return RephrasedCard(
+        front=str(data.get("front", "")).strip(),
+        back=str(data.get("back", "")).strip(),
+    )
+
+
+@dataclass
+class CardVariantGrade:
+    """The automatic grader's verdict on one flashcard variant."""
+
+    label: str
+    score: float
+    fact_preserved: bool
+    reworded: bool
+    leaked: bool
+    good_teaching: bool
+    reasons: list[str] = field(default_factory=list)
+
+    @property
+    def acceptable(self) -> bool:
+        return self.label != LABEL_WRONG and not self.leaked
+
+
+@runtime_checkable
+class CardGrader(Protocol):
+    def grade(self, source: SourceCard, variant: RephrasedCard) -> CardVariantGrade: ...
+
+
+class HeuristicCardGrader:
+    """Deterministic, offline grader for flashcard variants (no network, no model).
+
+    Mirrors :class:`HeuristicGrader` but for Front/Back cards: the BACK fact must
+    be preserved (recall-style token coverage, or an exact match), the FRONT must
+    actually be reworded, the back must teach (non-trivial), and nothing may leak
+    a heldout question. Derives the same three-way label + a continuous ``score``
+    the ``min_quality`` gate uses.
+    """
+
+    def __init__(self, heldout_texts: list[str] | None = None) -> None:
+        self._heldout_tokens = [tokens(t) for t in (heldout_texts or [])]
+
+    def grade(self, source: SourceCard, variant: RephrasedCard) -> CardVariantGrade:
+        reasons: list[str] = []
+
+        coverage = _back_coverage(source.back, variant.back)
+        exact_back = bool(_normalize(source.back)) and (
+            _normalize(variant.back) == _normalize(source.back)
+        )
+        if exact_back:
+            coverage = 1.0
+        fact_preserved = exact_back or coverage >= _FACT_PRESERVED_COVERAGE
+        if not fact_preserved:
+            reasons.append(f"back fact not preserved (coverage={coverage:.2f})")
+
+        reworded = bool(_normalize(variant.front)) and (
+            _normalize(variant.front) != _normalize(source.front)
+        )
+        if not reworded:
+            reasons.append("front is a verbatim copy (not rephrased)")
+
+        good_teaching = len(variant.back.strip()) >= _MIN_EXPLANATION_CHARS
+        if not good_teaching:
+            reasons.append("back too thin to teach")
+
+        leaked = self._is_leak(variant)
+        if leaked:
+            reasons.append("variant near-duplicates a pool::heldout item")
+
+        score = (
+            0.6 * coverage
+            + 0.2 * (1.0 if reworded else 0.0)
+            + 0.1 * (0.0 if leaked else 1.0)
+            + 0.1 * (1.0 if good_teaching else 0.0)
+        )
+
+        if leaked or not fact_preserved:
+            label = LABEL_WRONG
+        elif not reworded or not good_teaching:
+            label = LABEL_BAD_TEACHING
+        else:
+            label = LABEL_CORRECT_USEFUL
+
+        return CardVariantGrade(
+            label=label,
+            score=round(score, 4),
+            fact_preserved=fact_preserved,
+            reworded=reworded,
+            leaked=leaked,
+            good_teaching=good_teaching,
+            reasons=reasons,
+        )
+
+    def _is_leak(self, variant: RephrasedCard) -> bool:
+        if not self._heldout_tokens:
+            return False
+        probe = tokens(variant.front + " " + variant.back)
+        return any(
+            jaccard(probe, held) >= _LEAKAGE_JACCARD for held in self._heldout_tokens
+        )
+
+
+def _back_coverage(source_back: str, variant_back: str) -> float:
+    """Fraction of the source back's content tokens that reappear in the variant
+    back (recall-oriented). 0.0 when the source has no content tokens."""
+    src = tokens(source_back)
+    if not src:
+        return 0.0
+    var = tokens(variant_back)
+    return len(src & var) / len(src)
+
+
+@dataclass
+class GenerateCardSummary:
+    """Outcome of a :func:`generate_card_variants` run (mirrors GenerateSummary)."""
+
+    ai_disabled: bool = False
+    considered: int = 0
+    written: int = 0
+    blocked: int = 0
+    skipped_existing: int = 0
+    skipped_ai_source: int = 0
+    rejected_malformed: int = 0
+    provider_errors: int = 0
+    by_label: dict[str, int] = field(default_factory=dict)
+
+    def _tally(self, label: str) -> None:
+        self.by_label[label] = self.by_label.get(label, 0) + 1
+
+
+def generate_card_variants(
+    col: anki.collection.Collection,
+    note_ids: list[int] | None = None,
+    *,
+    n: int = 1,
+    provider: CardProvider | None = None,
+    min_quality: float = DEFAULT_MIN_QUALITY,
+    grader: CardGrader | None = None,
+) -> GenerateCardSummary:
+    """Generate grounded variant memory cards from first-principles Basic notes.
+
+    For each source first-principles card, produce ``n`` reworded same-fact
+    variants via ``provider``, grade each, and write only those that clear the
+    ``min_quality`` gate and are not classified *wrong*. Each accepted variant is
+    a native **suspended** ``Basic`` note in ``Speedrun::Cards`` tagged
+    ``bank::ai-generated``, ``variant-of::<source_note_id>``, a stable
+    ``variantuid::`` (idempotency), and the source's ``topic::``/``concept::``
+    tags — so it syncs, activates by topic exactly like its source, and is
+    excluded from the Memory score (review-only).
+
+    **AI-off:** with ``provider is None`` this is an immediate no-op that writes
+    nothing and blocks nothing (``summary.ai_disabled`` is True).
+    """
+    summary = GenerateCardSummary()
+    if provider is None:
+        summary.ai_disabled = True
+        return summary
+
+    from anki.notes import NoteId
+    from anki.speedrun import (
+        BANK_AI_GENERATED_TAG,
+        CONCEPT_TAG_PREFIX,
+        FIRST_PRINCIPLES_TAG,
+        FLASHCARD_NOTETYPE_NAME,
+        TOPIC_TAG_PREFIX,
+        concepts_of_note,
+        topics_of_note,
+    )
+
+    sr = col.speedrun
+    _, flashcards_deck = sr.ensure_decks()
+    basic = col.models.by_name(FLASHCARD_NOTETYPE_NAME)
+    assert basic is not None, "stock Basic notetype must exist"
+
+    if note_ids is None:
+        note_ids = [int(nid) for nid in col.find_notes(f"tag:{FIRST_PRINCIPLES_TAG}")]
+
+    if grader is None:
+        grader = HeuristicCardGrader(heldout_texts=_heldout_texts(col))
+
+    existing = _existing_variant_uids(col)
+    new_card_ids: list[Any] = []
+
+    for nid in note_ids:
+        note = col.get_note(NoteId(int(nid)))
+        # Never rephrase an AI variant (no variants of variants).
+        if BANK_AI_GENERATED_TAG in note.tags:
+            summary.skipped_ai_source += 1
+            continue
+        front = str(note["Front"]) if "Front" in note else ""
+        back = str(note["Back"]) if "Back" in note else ""
+        if not front.strip() or not back.strip():
+            summary.rejected_malformed += 1
+            continue
+        note_concepts = concepts_of_note(note)
+        source = SourceCard(
+            front=front,
+            back=back,
+            source=f"first-principles {nid}",
+            topics=topics_of_note(note),
+            concept=note_concepts[0] if note_concepts else "",
+            note_id=int(nid),
+        )
+        summary.considered += 1
+        for i in range(n):
+            variant_uid = f"fp-{nid}-v{i}"
+            if variant_uid in existing:
+                summary.skipped_existing += 1
+                continue
+            try:
+                variant = provider.rephrase_card(source)
+            except Exception:  # noqa: BLE001 — one bad call must not abort the batch
+                summary.provider_errors += 1
+                continue
+            grade = grader.grade(source, variant)
+            summary._tally(grade.label)
+            if grade.label == LABEL_WRONG or grade.score < min_quality:
+                summary.blocked += 1
+                continue
+            new_note = col.new_note(basic)
+            new_note["Front"] = variant.front
+            new_note["Back"] = variant.back
+            tags = [f"{TOPIC_TAG_PREFIX}{t}" for t in source.topics]
+            if source.concept:
+                tags.append(f"{CONCEPT_TAG_PREFIX}{source.concept}")
+            tags.append(BANK_AI_GENERATED_TAG)
+            tags.append(f"{VARIANT_OF_TAG_PREFIX}{nid}")
+            tags.append(f"{VARIANT_UID_TAG_PREFIX}{variant_uid}")
+            new_note.tags = tags
+            col.add_note(new_note, flashcards_deck)
+            existing.add(variant_uid)
+            new_card_ids.extend(c.id for c in new_note.cards())
+            summary.written += 1
+
+    # Suspend all new variant cards so they stay inert until a related question
+    # is missed (or a coverage sweep activates them) — exactly like their source.
+    if new_card_ids:
+        col.sched.suspend_cards(new_card_ids)
+
+    return summary
 
 
 # --- Top-level convenience ----------------------------------------------------

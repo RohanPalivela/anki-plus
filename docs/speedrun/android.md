@@ -67,12 +67,12 @@ just android-run --rebuild    # rebuild backend + app first (after changing Spee
 
 ### Configuration knobs (env vars for both scripts)
 
-| Var | Default | Meaning |
-| --- | ------- | ------- |
-| `SPEEDRUN_BRANCH` | current branch of this fork | fork branch the backend compiles |
-| `SPEEDRUN_API` | `35` | emulator system-image API level |
-| `SPEEDRUN_AVD` | `speedrun_arm64` | emulator name |
-| `ANDROID_HOME` | `/opt/homebrew/share/android-commandlinetools` | SDK location |
+| Var               | Default                                        | Meaning                          |
+| ----------------- | ---------------------------------------------- | -------------------------------- |
+| `SPEEDRUN_BRANCH` | current branch of this fork                    | fork branch the backend compiles |
+| `SPEEDRUN_API`    | `35`                                           | emulator system-image API level  |
+| `SPEEDRUN_AVD`    | `speedrun_arm64`                               | emulator name                    |
+| `ANDROID_HOME`    | `/opt/homebrew/share/android-commandlinetools` | SDK location                     |
 
 ### Gotchas (the scripts handle these; know them anyway)
 
@@ -102,20 +102,20 @@ protobuf schema (`proto/anki/*.proto`). They differ only in the native bridge
 that carries protobuf-encoded RPC calls into that core:
 
 ```
-                         proto/anki/*.proto  (single source of truth)
-                                    │
-                     full build (just check / just build)
-                                    │
-                    out/rslib/proto/descriptors.bin  ── service/method indices
-                                    │
-        ┌───────────────────────────┴───────────────────────────┐
-        │                                                         │
-   Desktop bridge                                          Android bridge
-   pylib/rsbridge (PyO3 cdylib)                            rsdroid (JNI)  ← EXTERNAL
-        │                                                         │
-   Python  col._backend.*                                  Kotlin backend wrapper
-        │                                                         │
-   qt/aqt + ts/ (Speedrun UI)                              AnkiDroid Kotlin UI ← EXTERNAL
+                      proto/anki/*.proto  (single source of truth)
+                                 │
+                  full build (just check / just build)
+                                 │
+                 out/rslib/proto/descriptors.bin  ── service/method indices
+                                 │
+     ┌───────────────────────────┴───────────────────────────┐
+     │                                                         │
+Desktop bridge                                          Android bridge
+pylib/rsbridge (PyO3 cdylib)                            rsdroid (JNI)  ← EXTERNAL
+     │                                                         │
+Python  col._backend.*                                  Kotlin backend wrapper
+     │                                                         │
+qt/aqt + ts/ (Speedrun UI)                              AnkiDroid Kotlin UI ← EXTERNAL
 ```
 
 Every RPC is dispatched the same way on both platforms:
@@ -149,14 +149,14 @@ D-12): Android needs only thin UI, no Python.
 
 The **engine + contract** side of Android is already done and verified:
 
-| Piece | Location | State |
-| ----- | -------- | ----- |
-| Speedrun RPC contract | `proto/anki/speedrun.proto` (`java_multiple_files = true`) | Kotlin/Java-codegen ready |
-| Rust engine | `rslib/src/speedrun/` (activation, sweep, mastery, blueprint, value ordering, service) | Compiles + tests pass |
-| Service registration | `rslib/proto/src/lib.rs` (`protobuf!(speedrun, "speedrun")`) | Wired |
-| Android-aware core | `rslib/src/storage/sqlite.rs`, `collection/backup.rs`, `media/files.rs` (`#[cfg(target_os = "android")]`) | Upstream, reused |
-| Cross-compile smoke check | `tools/android-check` → `just android-check` | **NEW (this repo)** |
-| Codegen verification | `tools/speedrun-codegen-check` → `just speedrun-codegen-check` | **NEW (this repo)** |
+| Piece                     | Location                                                                                                  | State                     |
+| ------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------- |
+| Speedrun RPC contract     | `proto/anki/speedrun.proto` (`java_multiple_files = true`)                                                | Kotlin/Java-codegen ready |
+| Rust engine               | `rslib/src/speedrun/` (activation, sweep, mastery, blueprint, value ordering, service)                    | Compiles + tests pass     |
+| Service registration      | `rslib/proto/src/lib.rs` (`protobuf!(speedrun, "speedrun")`)                                              | Wired                     |
+| Android-aware core        | `rslib/src/storage/sqlite.rs`, `collection/backup.rs`, `media/files.rs` (`#[cfg(target_os = "android")]`) | Upstream, reused          |
+| Cross-compile smoke check | `tools/android-check` → `just android-check`                                                              | **NEW (this repo)**       |
+| Codegen verification      | `tools/speedrun-codegen-check` → `just speedrun-codegen-check`                                            | **NEW (this repo)**       |
 
 `just speedrun-codegen-check` (run after a build) confirms `SpeedrunService`
 appears in `out/rslib/proto/descriptors.bin`, `out/pylib/anki/_backend_generated.py`,
@@ -172,11 +172,11 @@ fork's `rslib`.
 
 ## 3. Phase scope — what "mobile" means per milestone
 
-| Milestone | Full-plan target | This phase (`02_build_prompt.md`) |
-| --------- | ---------------- | --------------------------------- |
-| **M0 A4** | AnkiDroid build links this fork's backend and opens a deck | Documented follow-up; **not a blocker** |
+| Milestone | Full-plan target                                                                                    | This phase (`02_build_prompt.md`)                                            |
+| --------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **M0 A4** | AnkiDroid build links this fork's backend and opens a deck                                          | Documented follow-up; **not a blocker**                                      |
 | **M1 1c** | Desktop installer + Android **review** build on shared engine (no Speedrun UI yet; no two-way sync) | **Scaffolding/notes only** (this doc + cross-compile smoke + codegen verify) |
-| **M2 2c** | Reuse sync; Android renders the three scores via `SpeedrunService` RPCs; Kotlin question surface | Later phase |
+| **M2 2c** | Reuse sync; Android renders the three scores via `SpeedrunService` RPCs; Kotlin question surface    | Later phase                                                                  |
 
 So for the current phase the in-repo deliverable is: **prove the shared engine
 compiles for Android and the Speedrun contract is exposed**, and document the

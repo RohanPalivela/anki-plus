@@ -14,7 +14,8 @@
 //!   error) from their real `revlog` responses on served questions.
 //! - `a` (discrimination) and `b` (difficulty) are per-question IRT parameters
 //!   stored on the `SpeedrunQuestion` note.
-//! - `c` is the 4-option guessing floor (a named constant, [`GUESSING_FLOOR_C`]).
+//! - `c` is the 4-option guessing floor (a named constant,
+//!   [`GUESSING_FLOOR_C`]).
 //!
 //! **Why this does not collapse to the Memory model.** Memory reads FSRS
 //! retrievability of *activated flashcards*; Performance is fit on *question
@@ -79,12 +80,12 @@ pub(crate) const NEUTRAL_MASTERY: f64 = 0.5;
 /// slips/guesses on a reading-heavy MCQ) and down-weighted in the ability fit.
 /// This is how response time enters the model as a real per-response feature.
 const MIN_ENGAGED_MILLIS: f64 = 1000.0;
-/// Floor on the response-time reliability weight so a fast answer is discounted,
-/// never discarded.
+/// Floor on the response-time reliability weight so a fast answer is
+/// discounted, never discarded.
 const MIN_ENGAGEMENT_WEIGHT: f64 = 0.5;
 
-/// Representative IRT parameters for a topic with no question data (used only in
-/// per-topic display / uncovered-topic simulation): average difficulty, unit
+/// Representative IRT parameters for a topic with no question data (used only
+/// in per-topic display / uncovered-topic simulation): average difficulty, unit
 /// discrimination.
 pub(crate) const DEFAULT_REPRESENTATIVE_A: f64 = 1.0;
 pub(crate) const DEFAULT_REPRESENTATIVE_B: f64 = 0.0;
@@ -155,7 +156,8 @@ fn engagement_weight(taken_millis: u32) -> f64 {
 /// MAP estimate of ability under a `Normal(0, ABILITY_PRIOR_SD)` prior via a
 /// deterministic grid search, with the standard error from the analytic Fisher
 /// information (data + prior) at the estimate. With no responses this returns
-/// the prior: `(0.0, ABILITY_PRIOR_SD)` — a maximally uncertain, chance ability.
+/// the prior: `(0.0, ABILITY_PRIOR_SD)` — a maximally uncertain, chance
+/// ability.
 pub(crate) fn estimate_theta(responses: &[QuestionResponse]) -> (f64, f64) {
     let prior_precision = 1.0 / (ABILITY_PRIOR_SD * ABILITY_PRIOR_SD);
 
@@ -554,7 +556,10 @@ mod test {
         // lowers P at the same ability + mastery.
         let easy = predict_performance(theta, a, -1.0, &[0.5, 0.5]);
         let hard = predict_performance(theta, a, 1.5, &[0.5, 0.5]);
-        assert!(easy > hard, "difficulty must move performance: {easy} vs {hard}");
+        assert!(
+            easy > hard,
+            "difficulty must move performance: {easy} vs {hard}"
+        );
     }
 
     /// Response-time weighting discounts sub-second answers but never discards

@@ -25,3 +25,4 @@ docs/_build/
 docs/autoapi/
 .complexipy_cache
 .env.logins
+.env

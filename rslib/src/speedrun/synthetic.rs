@@ -5,16 +5,16 @@
 //!
 //! Real collections often have little/no `revlog` on served questions, so the
 //! Performance and Readiness models can't be exercised (and a grader can't show
-//! they "beat chance"). This helper deterministically fabricates responses for a
-//! chosen *true* ability, sampled from the same 2PL the Performance model fits,
-//! and writes them as native `revlog` entries on served-question cards.
+//! they "beat chance"). This helper deterministically fabricates responses for
+//! a chosen *true* ability, sampled from the same 2PL the Performance model
+//! fits, and writes them as native `revlog` entries on served-question cards.
 //!
 //! **Gating (so synthetic data never masquerades as real progress):**
 //! - It is only ever run by an *explicit* call (`col.speedrun.seed_synthetic_
 //!   responses(...)` / this method). Nothing in the normal study loop calls it.
-//! - It flips the [`SYNTHETIC_SEEDED_CONFIG_KEY`] flag, which the Performance and
-//!   Readiness responses echo as `synthetic = true`, so any surfaced score is
-//!   visibly labelled synthetic on every client.
+//! - It flips the [`SYNTHETIC_SEEDED_CONFIG_KEY`] flag, which the Performance
+//!   and Readiness responses echo as `synthetic = true`, so any surfaced score
+//!   is visibly labelled synthetic on every client.
 //! - It is atomic + undoable (a single `Op::SeedSyntheticResponses`), and only
 //!   *adds* `revlog` rows — it never touches FSRS state, due dates, or the
 //!   question/flashcard content.
@@ -159,9 +159,7 @@ mod test {
         assert!(before.abstained);
         assert!(!before.synthetic);
 
-        let out = col
-            .speedrun_seed_synthetic_responses(4, 1.5, 123)
-            .unwrap();
+        let out = col.speedrun_seed_synthetic_responses(4, 1.5, 123).unwrap();
         assert!(out.output > 0, "should add synthetic responses");
 
         let after = col.speedrun_performance_score().unwrap();
@@ -186,7 +184,10 @@ mod test {
         crate::speedrun::synthetic::test::add_served_questions(&mut col2, 12);
         col2.speedrun_seed_synthetic_responses(4, 1.5, 123).unwrap();
         let after2 = col2.speedrun_performance_score().unwrap();
-        assert!((after.theta - after2.theta).abs() < 1e-6, "seed must be deterministic");
+        assert!(
+            (after.theta - after2.theta).abs() < 1e-6,
+            "seed must be deterministic"
+        );
     }
 
     /// Add `n` served SpeedrunQuestion notes with varied difficulty.
@@ -202,7 +203,13 @@ mod test {
                 nt.id = NotetypeId(0);
                 nt.name = QUESTION_NOTETYPE_NAME.to_string();
                 // Ensure the frozen field contract exists so a/b parse.
-                for field in ["correct", "explanation", "source", "difficulty_b", "discrimination_a"] {
+                for field in [
+                    "correct",
+                    "explanation",
+                    "source",
+                    "difficulty_b",
+                    "discrimination_a",
+                ] {
                     nt.add_field(field);
                 }
                 col.add_notetype(&mut nt, true).unwrap();

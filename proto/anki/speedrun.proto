@@ -40,8 +40,8 @@ service SpeedrunService {
   // DEV/TEST ONLY: fabricate deterministic synthetic practice responses for a
   // chosen true ability so the Performance/Readiness models can be exercised on
   // a collection with no real history. It flips a config flag so every surfaced
-  // score is labelled `synthetic` — synthetic data is never allowed to look like
-  // real progress. Not part of the normal study loop.
+  // score is labelled `synthetic` — synthetic data is never allowed to look
+  // like real progress. Not part of the normal study loop.
   rpc SeedSyntheticResponses(SeedSyntheticResponsesRequest)
       returns (SeedSyntheticResponsesResponse);
 }

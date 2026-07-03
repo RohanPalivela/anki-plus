@@ -224,9 +224,8 @@ impl Collection {
         let min_graded = self.readiness_min_graded();
         let min_coverage = self.readiness_min_coverage();
         let max_width = self.readiness_max_width();
-        let abstained = fit.graded_count < min_graded
-            || (coverage as f64) < min_coverage
-            || width > max_width;
+        let abstained =
+            fit.graded_count < min_graded || (coverage as f64) < min_coverage || width > max_width;
 
         let top_reasons = readiness_reasons(&fit, &blueprint, coverage, width, max_width);
 
@@ -265,7 +264,11 @@ impl Collection {
         }
 
         let total_weight: f64 = blueprint.topics.iter().map(|t| t.weight as f64).sum();
-        let total_weight = if total_weight > 0.0 { total_weight } else { 1.0 };
+        let total_weight = if total_weight > 0.0 {
+            total_weight
+        } else {
+            1.0
+        };
 
         // Largest-remainder apportionment so items sum to exactly EXAM_ITEMS.
         let mut plans: Vec<TopicPlan> = Vec::with_capacity(blueprint.topics.len());
@@ -385,7 +388,11 @@ mod test {
             assert!((0.0..1.0).contains(&u));
             sum += r.next_normal();
         }
-        assert!((sum / 10_000.0).abs() < 0.1, "normal mean off: {}", sum / 10_000.0);
+        assert!(
+            (sum / 10_000.0).abs() < 0.1,
+            "normal mean off: {}",
+            sum / 10_000.0
+        );
     }
 
     #[test]

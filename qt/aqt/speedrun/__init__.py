@@ -15,6 +15,11 @@ Adds a Tools → "Speedrun (MCAT)" submenu wiring up these actions:
   MCAT-relevant question bank as native notes (which then sync to every device).
   This is the *only* source of practice questions; it also imports the linked
   first-principles memory cards (suspended) that a missed question activates.
+* **Enable AI rewording** — a checkable, synced master switch (off by default)
+  for the grounded AI features. The three scores are produced with it off.
+* **Generate AI flashcard variants** — reword the first-principles memory cards
+  into grounded, source-checked variants (see :mod:`anki.speedrun_rephrase`);
+  gated on the switch and on an OpenAI key/library being available.
 
 This module is additive and fork-specific; it is wired in from
 ``AnkiQt.setupMenus`` with a single call to :func:`setup_speedrun_menu`.
@@ -64,6 +69,24 @@ def setup_speedrun_menu(mw: aqt.main.AnkiQt) -> None:
     menu.addSeparator()
     import_bank_action = menu.addAction(tr.speedrun_import_bank_action())
     qconnect(import_bank_action.triggered, lambda: run_import_bank(mw))
+
+    menu.addSeparator()
+    # Master AI switch (checkable) + the generation action it gates. Off by
+    # default; the app scores fine with AI disabled.
+    ai_toggle = menu.addAction(tr.speedrun_ai_enable_action())
+    ai_toggle.setCheckable(True)
+    qconnect(ai_toggle.triggered, lambda checked: set_ai_enabled(mw, checked))
+    generate_cards_action = menu.addAction(tr.speedrun_ai_generate_cards_action())
+    qconnect(generate_cards_action.triggered, lambda: run_generate_card_variants(mw))
+
+    def _sync_ai_menu() -> None:
+        # Reflect the synced config each time the menu opens (it may have changed
+        # via sync or on another window), and gate the generate action on it.
+        enabled = bool(mw.col and mw.col.speedrun.ai_enabled())
+        ai_toggle.setChecked(enabled)
+        generate_cards_action.setEnabled(enabled)
+
+    qconnect(menu.aboutToShow, _sync_ai_menu)
 
     mw.form.menuTools.addSeparator()
     mw.form.menuTools.addMenu(menu)
@@ -127,9 +150,7 @@ def run_setup(mw: aqt.main.AnkiQt) -> None:
         ),
     ]
     if summary.demo_notes_removed:
-        lines.append(
-            tr.speedrun_setup_demo_removed(count=summary.demo_notes_removed)
-        )
+        lines.append(tr.speedrun_setup_demo_removed(count=summary.demo_notes_removed))
     showInfo("\n".join(lines), parent=mw, title=tr.speedrun_menu())
 
     # Guide the student straight into importing the bank if they have not yet.
@@ -197,6 +218,71 @@ def run_import_bank(mw: aqt.main.AnkiQt) -> bool:
         )
     showInfo("\n".join(lines), parent=mw, title=tr.speedrun_menu())
     return mw.col.speedrun.has_question_bank()
+
+
+def set_ai_enabled(mw: aqt.main.AnkiQt, enabled: bool) -> None:
+    """Persist the AI opt-in (synced) and confirm with a tooltip."""
+    if not mw.col:
+        showInfo(tr.speedrun_setup_no_collection(), parent=mw)
+        return
+    mw.col.speedrun.set_ai_enabled(enabled)
+    tooltip(
+        tr.speedrun_ai_enabled_on() if enabled else tr.speedrun_ai_enabled_off(),
+        parent=mw,
+    )
+
+
+def run_generate_card_variants(mw: aqt.main.AnkiQt) -> None:
+    """Generate grounded, reworded flashcard variants from the first-principles
+    memory cards using the configured AI provider.
+
+    Gated three ways: the AI master switch must be on, an OpenAI key + library
+    must be available (otherwise we explain how to set them up — AI stays a
+    clean no-op without them), and the question bank / first-principles cards
+    must be imported. Runs in the background so the network calls never freeze
+    the UI; each accepted variant is written as a suspended, synced Basic note
+    excluded from the Memory score.
+    """
+    if not mw.col:
+        showInfo(tr.speedrun_setup_no_collection(), parent=mw)
+        return
+    if not mw.col.speedrun.ai_enabled():
+        showInfo(tr.speedrun_ai_disabled_body(), parent=mw, title=tr.speedrun_menu())
+        return
+    if not ensure_bank_imported(mw):
+        return
+
+    from anki.speedrun_rephrase import OpenAIProvider, generate_card_variants
+    from aqt.operations import QueryOp
+
+    if not OpenAIProvider.available():
+        showInfo(tr.speedrun_ai_unavailable_body(), parent=mw, title=tr.speedrun_menu())
+        return
+
+    note_ids = mw.col.speedrun.first_principles_note_ids()
+    if not note_ids:
+        showInfo(tr.speedrun_ai_no_sources(), parent=mw, title=tr.speedrun_menu())
+        return
+
+    provider = OpenAIProvider()
+
+    def on_success(summary: Any) -> None:
+        mw.reset()
+        showInfo(
+            tr.speedrun_ai_generate_complete(
+                written_count=summary.written,
+                considered_count=summary.considered,
+                blocked_count=summary.blocked,
+            ),
+            parent=mw,
+            title=tr.speedrun_menu(),
+        )
+
+    QueryOp(
+        parent=mw,
+        op=lambda col: generate_card_variants(col, note_ids, provider=provider),
+        success=on_success,
+    ).with_progress(tr.speedrun_ai_generate_running()).run_in_background()
 
 
 def ensure_bank_imported(mw: aqt.main.AnkiQt) -> bool:

@@ -120,10 +120,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     <div class="score-row">
         {#if performance}
-            <section
-                class="snapshot-card"
-                class:muted={performance.abstained}
-            >
+            <section class="snapshot-card" class:muted={performance.abstained}>
                 <div class="snapshot-head">
                     <span class="label">{tr.speedrunDashboardPerformance()}</span>
                     {#if performance.synthetic}
@@ -149,10 +146,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         {/if}
 
         {#if readiness}
-            <section
-                class="snapshot-card"
-                class:muted={readiness.abstained}
-            >
+            <section class="snapshot-card" class:muted={readiness.abstained}>
                 <div class="snapshot-head">
                     <span class="label">{tr.speedrunDashboardReadiness()}</span>
                     {#if readiness.synthetic}
@@ -201,12 +195,18 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                                 on:click={() => toggle(topic.topic)}
                                 aria-expanded={!!expanded[topic.topic]}
                             >
-                                <span class="chevron" class:open={expanded[topic.topic]}>
+                                <span
+                                    class="chevron"
+                                    class:open={expanded[topic.topic]}
+                                >
                                     ›
                                 </span>
                                 <span class="topic-name">{topic.label}</span>
                             </button>
-                            <span class="topic-mastery" title={tr.speedrunCurriculumMastery()}>
+                            <span
+                                class="topic-mastery"
+                                title={tr.speedrunCurriculumMastery()}
+                            >
                                 {masteryLabel(topic)}
                             </span>
                             <button
@@ -224,8 +224,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                             ></div>
                         </div>
                         <div class="topic-meta">
-                            {tr.speedrunCurriculumQuestions({ count: topic.servedQuestions })}
-                            · {tr.speedrunCurriculumLessons({ count: topic.lessonCards })}
+                            {tr.speedrunCurriculumQuestions({
+                                count: topic.servedQuestions,
+                            })}
+                            · {tr.speedrunCurriculumLessons({
+                                count: topic.lessonCards,
+                            })}
                         </div>
 
                         {#if expanded[topic.topic]}
@@ -233,7 +237,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                                 {#each topic.concepts as concept (concept.concept)}
                                     <li class="concept">
                                         <div class="concept-info">
-                                            <span class="concept-name">{concept.label}</span>
+                                            <span class="concept-name">
+                                                {concept.label}
+                                            </span>
                                             <span
                                                 class="concept-state"
                                                 class:done={concept.practiced}
@@ -247,7 +253,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                                             })}
                                             {#if concept.lessonCards > 0}
                                                 · {tr.speedrunCurriculumLessonsActive({
-                                                    activated: String(concept.lessonsActivated),
+                                                    activated: String(
+                                                        concept.lessonsActivated,
+                                                    ),
                                                     total: concept.lessonCards,
                                                 })}
                                             {/if}
@@ -255,7 +263,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                                         <button
                                             class="chip-btn concept-study"
                                             on:click={() =>
-                                                startScoped(concept.topic, concept.concept)}
+                                                startScoped(
+                                                    concept.topic,
+                                                    concept.concept,
+                                                )}
                                         >
                                             {tr.speedrunCurriculumStudy()}
                                         </button>

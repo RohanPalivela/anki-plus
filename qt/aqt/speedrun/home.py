@@ -57,8 +57,21 @@ class SpeedrunHome:
         self._refresh_needed = False
 
     def refresh_if_needed(self) -> None:
-        if self._refresh_needed:
-            self.refresh()
+        if not self._refresh_needed:
+            return
+        if self.mw.progress.busy():
+            # A progress operation (most importantly a sync) is in flight.
+            # refresh() reloads the SvelteKit page, which fans out several
+            # expensive collection reads (memory/performance/readiness/
+            # curriculum). Running that while progress is active overlaps Anki's
+            # busy-cursor toggle, and on macOS/Qt6 setOverrideCursor can crash
+            # inside QImage::toCGImage when it coincides with CPU-intensive GUI
+            # work — this is exactly what took the app down after syncing a
+            # mobile session. progress.single_shot only fires its callback once
+            # no progress remains (levels == 0), so defer until then.
+            self.mw.progress.single_shot(100, self.refresh_if_needed)
+            return
+        self.refresh()
 
     def op_executed(
         self, changes: OpChanges, handler: object | None, focused: bool

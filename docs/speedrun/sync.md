@@ -22,14 +22,14 @@ rule**.
 Speedrun invents no side tables. Each concept maps to an object Anki already
 syncs:
 
-| Speedrun concept | Native object | Sync path |
-| ---------------- | ------------- | --------- |
-| Practice question | `SpeedrunQuestion` note + its card | chunked notes/cards |
-| Topic / pool / miss labels | `topic::` / `pool::` / `miss::` **tags** | unchunked changes |
-| Question↔card link | shared `topic::` tag and/or `gates::<nid>` tag | (tags) |
-| A student answering a question | a **`revlog`** review row | chunked revlog |
-| Gated card activation | card `queue`: `Suspended` → active | chunked cards |
-| Blueprint / config | collection config | unchunked changes |
+| Speedrun concept               | Native object                                  | Sync path           |
+| ------------------------------ | ---------------------------------------------- | ------------------- |
+| Practice question              | `SpeedrunQuestion` note + its card             | chunked notes/cards |
+| Topic / pool / miss labels     | `topic::` / `pool::` / `miss::` **tags**       | unchunked changes   |
+| Question↔card link             | shared `topic::` tag and/or `gates::<nid>` tag | (tags)              |
+| A student answering a question | a **`revlog`** review row                      | chunked revlog      |
+| Gated card activation          | card `queue`: `Suspended` → active             | chunked cards       |
+| Blueprint / config             | collection config                              | unchunked changes   |
 
 Because all of these are ordinary rows carrying a USN, Anki's incremental sync
 (`rslib/src/sync/collection/`) transfers them with no Speedrun-specific code.

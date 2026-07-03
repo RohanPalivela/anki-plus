@@ -3,9 +3,10 @@
 
 //! Deterministic SplitMix64 PRNG for the Speedrun models.
 //!
-//! Self-contained (no external RNG dependency) so seeded output is byte-for-byte
-//! reproducible on every platform — desktop and Android share this engine and
-//! the Readiness Monte Carlo / synthetic seeding rely on identical draws.
+//! Self-contained (no external RNG dependency) so seeded output is
+//! byte-for-byte reproducible on every platform — desktop and Android share
+//! this engine and the Readiness Monte Carlo / synthetic seeding rely on
+//! identical draws.
 
 /// SplitMix64 generator (Steele et al.). Fast, tiny, and reproducible.
 pub(crate) struct SplitMix64 {

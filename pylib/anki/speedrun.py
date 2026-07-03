@@ -265,6 +265,12 @@ DEFAULT_SESSION_PRACTICE_CAP = 10
 DEFAULT_SESSION_FLASHCARD_CAP = 20
 DEFAULT_SESSION_RECAP_CAP = 5
 
+#: Master switch for every AI feature (grounded card/question rephrasal). Stored
+#: in the synced collection config and OFF by default: the app produces all three
+#: scores with AI disabled (a hard Plan requirement), and AI only ever runs after
+#: the student opts in. Synced so the choice carries across devices.
+AI_ENABLED_CONFIG_KEY = "speedrunAiEnabled"
+
 #: Starter MCAT blueprint: AAMC-style *topic labels and approximate relative
 #: weights only*.
 #:
@@ -771,6 +777,31 @@ class Speedrun:
             seed=seed,
         )
 
+    # AI features (opt-in, synced toggle)
+    ##########################################################################
+
+    def ai_enabled(self) -> bool:
+        """Whether the student has opted into AI features (default False).
+
+        The score models never depend on this — the app produces Memory,
+        Performance, and Readiness with AI off. It only gates grounded card /
+        question rephrasal (see :mod:`anki.speedrun_rephrase`)."""
+        return bool(self.col.get_config(AI_ENABLED_CONFIG_KEY, False))
+
+    def set_ai_enabled(self, enabled: bool) -> None:
+        """Persist the AI opt-in in the synced collection config."""
+        self.col.set_config(AI_ENABLED_CONFIG_KEY, bool(enabled))
+
+    def first_principles_note_ids(self) -> list[int]:
+        """Note ids of the imported first-principles memory cards (rephrasal
+        sources), excluding any that are themselves AI-generated variants."""
+        return [
+            int(nid)
+            for nid in self.col.find_notes(
+                f"tag:{FIRST_PRINCIPLES_TAG} -tag:{BANK_AI_GENERATED_TAG}"
+            )
+        ]
+
     # Miss-reason flow
     ##########################################################################
 
@@ -1268,12 +1299,20 @@ class Speedrun:
 
     def served_question_note_ids(self) -> list[NoteId]:
         """Note ids of served (never held-out) practice questions, in a stable
-        interleaved-ish order. Held-out questions are never returned."""
+        creation-order list. Held-out questions are never returned.
+
+        Ordering is intentionally the backend default (note id / creation order)
+        rather than the browser's configured sort column: it keeps parity with
+        the Android implementation and avoids depending on per-profile browser
+        config, which is unset on freshly synced collections (previously this
+        surfaced a spurious "None is not a valid sort order" and non-deterministic
+        results). Callers that need interleaving apply it in
+        ``served_questions_interleaved``."""
         query = (
             f"note:{QUESTION_NOTETYPE_NAME} tag:{POOL_SERVED_TAG} "
             f"-tag:{POOL_HELDOUT_TAG}"
         )
-        return list(self.col.find_notes(query, order=True))
+        return list(self.col.find_notes(query))
 
     def served_questions_interleaved(
         self,

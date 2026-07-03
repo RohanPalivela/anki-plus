@@ -57,10 +57,18 @@ pub(crate) const POOL_SERVED_TAG: &str = "pool::served";
 /// and never fitted on). Mirrors `anki.speedrun.POOL_HELDOUT_TAG`.
 pub(crate) const POOL_HELDOUT_TAG: &str = "pool::heldout";
 
+/// Tag marking an AI-generated variant (rephrased question or flashcard).
+/// Mirrors `anki.speedrun.BANK_AI_GENERATED_TAG`. AI flashcard variants are a
+/// reworded copy of an existing fact, so they are excluded from the Memory
+/// mastery pass (review-only): counting a variant would double-count the same
+/// fact's retention.
+pub(crate) const BANK_AI_GENERATED_TAG: &str = "bank::ai-generated";
+
 /// Config flag set once a collection has been seeded with synthetic practice
-/// responses (see [`synthetic`]). The Performance/Readiness responses echo it as
-/// `synthetic = true` so a surfaced score is always labelled — synthetic data is
-/// never allowed to masquerade as real progress. camelCase to match siblings.
+/// responses (see [`synthetic`]). The Performance/Readiness responses echo it
+/// as `synthetic = true` so a surfaced score is always labelled — synthetic
+/// data is never allowed to masquerade as real progress. camelCase to match
+/// siblings.
 pub(crate) const SYNTHETIC_SEEDED_CONFIG_KEY: &str = "speedrunSyntheticSeeded";
 
 /// Why a practice question was missed. Mirrors the protobuf `MissReason`, but

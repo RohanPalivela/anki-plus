@@ -293,8 +293,8 @@ async fn sync_roundtrip() -> Result<()> {
 /// test proves that end-to-end for the speedrun-specific state that the plan's
 /// acceptance calls out:
 ///
-/// - **Gated card activation** (a flashcard flipped from `Suspended` → active by
-///   a missed question) propagates across devices.
+/// - **Gated card activation** (a flashcard flipped from `Suspended` → active
+///   by a missed question) propagates across devices.
 /// - **Miss-reason tags** (`miss::knowledge-gap`) propagate.
 /// - **Practice answers** (revlog reviews) from the *same question answered on
 ///   both devices while offline* all merge with **none lost and none
@@ -358,8 +358,7 @@ async fn speedrun_state_syncs_across_devices_offline() -> Result<()> {
         // reconnects first.
         {
             let mut col1 = ctx.col1();
-            let activated =
-                col1.activate_cards_for_miss(question_nid, MissReason::KnowledgeGap)?;
+            let activated = col1.activate_cards_for_miss(question_nid, MissReason::KnowledgeGap)?;
             assert_eq!(activated.output, vec![flashcard_cid]);
             let mut q = col1.storage.get_note(question_nid)?.unwrap();
             q.tags.push("miss::knowledge-gap".into());

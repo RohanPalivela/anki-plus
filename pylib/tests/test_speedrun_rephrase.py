@@ -23,13 +23,18 @@ from anki.speedrun_rephrase import (
     LABEL_WRONG,
     VARIANT_OF_TAG_PREFIX,
     VARIANT_UID_TAG_PREFIX,
+    HeuristicCardGrader,
     HeuristicGrader,
     MockProvider,
     OpenAIProvider,
+    RephrasedCard,
     RephrasedQuestion,
+    SourceCard,
     SourceQuestion,
+    generate_card_variants,
     generate_variants,
     jaccard,
+    parse_card_provider_json,
     parse_provider_json,
     rephrase_question,
     scan_leakage,
@@ -234,6 +239,136 @@ def _served_bank() -> list[dict]:
             "ai_generated": False,
         }
     ]
+
+
+def _source_card(**overrides: Any) -> SourceCard:
+    base: dict[str, Any] = dict(
+        front="First principle: how do you compute the work done by a constant force?",
+        back=(
+            "Work W = F d cos(theta); only the force component along the "
+            "displacement does work, so perpendicular forces do zero work. "
+            "Net work equals the change in kinetic energy."
+        ),
+        source="first-principles fp-phys-work-1",
+        topics=["physics"],
+        concept="work-energy",
+    )
+    base.update(overrides)
+    return SourceCard(**base)
+
+
+def test_mock_card_good_preserves_fact_rewords_and_grades_useful():
+    src = _source_card()
+    variant = MockProvider().rephrase_card(src)
+    assert variant.front != src.front  # front reworded
+    assert variant.back == src.back  # fact preserved verbatim
+    grade = HeuristicCardGrader().grade(src, variant)
+    assert grade.label == LABEL_CORRECT_USEFUL
+    assert grade.fact_preserved and grade.reworded and grade.good_teaching
+    assert grade.score >= DEFAULT_MIN_QUALITY
+
+
+def test_mock_card_wrong_is_caught_as_fact_drift():
+    src = _source_card()
+    variant = MockProvider(quality="wrong").rephrase_card(src)
+    grade = HeuristicCardGrader().grade(src, variant)
+    assert grade.label == LABEL_WRONG
+    assert not grade.fact_preserved
+    assert not grade.acceptable
+
+
+def test_mock_card_verbatim_front_is_bad_teaching_not_wrong():
+    src = _source_card()
+    variant = MockProvider(quality="verbatim").rephrase_card(src)
+    grade = HeuristicCardGrader().grade(src, variant)
+    assert grade.label == LABEL_BAD_TEACHING
+    assert grade.fact_preserved and not grade.reworded
+    assert grade.acceptable  # bad teaching is filtered but never dangerous
+
+
+def test_card_grader_flags_leakage_near_duplicate():
+    src = _source_card()
+    heldout = src.front + " " + src.back
+    grader = HeuristicCardGrader(heldout_texts=[heldout])
+    leaky = RephrasedCard(front=src.front, back=src.back)
+    grade = grader.grade(src, leaky)
+    assert grade.leaked
+    assert grade.label == LABEL_WRONG
+
+
+def test_parse_card_provider_json_reads_front_and_back():
+    src = _source_card()
+    content = '{"front": "Reworded front?", "back": "Reworded but same fact."}'
+    variant = parse_card_provider_json(content, src)
+    assert variant.front == "Reworded front?"
+    assert variant.back == "Reworded but same fact."
+
+
+def _first_principles_cards() -> list[dict]:
+    return [
+        {
+            "uid": "fp-bio-atp-1",
+            "topic": "biology",
+            "concept": "cellular-respiration",
+            "front": "First principle: where is most ATP produced in the cell?",
+            "back": (
+                "Most ATP is produced in the mitochondrion via oxidative "
+                "phosphorylation, which uses the electron transport chain and "
+                "chemiosmosis to drive ATP synthase."
+            ),
+        }
+    ]
+
+
+def test_generate_card_variants_ai_off_is_clean_noop():
+    col = getEmptyCol()
+    col.speedrun.setup_mcat()
+    before = col.db.scalar("select count() from notes")
+    summary = generate_card_variants(col, provider=None)
+    assert summary.ai_disabled is True
+    assert summary.written == 0
+    assert col.db.scalar("select count() from notes") == before
+
+
+def test_generate_card_variants_writes_suspended_variant_and_is_idempotent():
+    col = getEmptyCol()
+    col.speedrun.setup_mcat()
+    col.speedrun.import_first_principles(cards=_first_principles_cards())
+
+    summary = generate_card_variants(col, provider=MockProvider())
+    assert summary.considered == 1
+    assert summary.written == 1
+
+    nids = col.find_notes(f"tag:{AI_GENERATED_TAG}")
+    assert len(nids) == 1
+    note = col.get_note(nids[0])
+    tags = note.tags
+    assert any(t.startswith(VARIANT_OF_TAG_PREFIX) for t in tags)
+    assert any(t.startswith(VARIANT_UID_TAG_PREFIX) for t in tags)
+    assert "topic::biology" in tags
+    assert "concept::cellular-respiration" in tags
+    # The fact is preserved and the front reworded.
+    assert "mitochondrion" in note["Back"].lower()
+    assert note["Front"] != _first_principles_cards()[0]["front"]
+    # Written as suspended (review-only until a related miss activates it).
+    for card in note.cards():
+        assert card.queue == -1  # QUEUE_TYPE_SUSPENDED
+
+    # Re-running writes nothing new (stable variantuid gate).
+    again = generate_card_variants(col, provider=MockProvider())
+    assert again.written == 0
+    assert again.skipped_existing >= 1
+    assert len(col.find_notes(f"tag:{AI_GENERATED_TAG}")) == 1
+
+
+def test_ai_enabled_toggle_defaults_off_and_persists():
+    col = getEmptyCol()
+    col.speedrun.setup_mcat()
+    assert col.speedrun.ai_enabled() is False
+    col.speedrun.set_ai_enabled(True)
+    assert col.speedrun.ai_enabled() is True
+    col.speedrun.set_ai_enabled(False)
+    assert col.speedrun.ai_enabled() is False
 
 
 def test_ai_generated_tag_matches_speedrun_constant():

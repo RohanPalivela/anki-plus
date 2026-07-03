@@ -32,6 +32,7 @@ use crate::search::JoinSearches;
 use crate::search::Negated;
 use crate::search::SearchNode;
 use crate::search::StateKind;
+use crate::speedrun::BANK_AI_GENERATED_TAG;
 use crate::speedrun::QUESTION_NOTETYPE_NAME;
 use crate::speedrun::TOPIC_TAG_PREFIX;
 
@@ -49,15 +50,15 @@ pub(crate) const EXAM_DATE_CONFIG_KEY: &str = "speedrunExamDate";
 /// Fallback projection horizon when no exam date is configured. A one-week
 /// retention horizon is the honest readiness question for exam prep ("will I
 /// still recall this in a week?"): a just-lapsed sub-day-stability card decays
-/// to near zero while a well-learned card stays high, so Again/Hard answers pull
-/// the score down the way a learner expects. A 1-day horizon is too lenient
-/// (you can recall almost anything tomorrow); a much longer one collapses even
-/// solid cards. Overridden by a configured future exam date.
+/// to near zero while a well-learned card stays high, so Again/Hard answers
+/// pull the score down the way a learner expects. A 1-day horizon is too
+/// lenient (you can recall almost anything tomorrow); a much longer one
+/// collapses even solid cards. Overridden by a configured future exam date.
 pub(crate) const DEFAULT_MASTERY_HORIZON_DAYS: f64 = 7.0;
 
-/// Clamp on the projection horizon so a distant or misconfigured exam date can't
-/// push every card's retrievability to ~0 (which would make the score useless).
-/// ~180 days spans a full prep cycle.
+/// Clamp on the projection horizon so a distant or misconfigured exam date
+/// can't push every card's retrievability to ~0 (which would make the score
+/// useless). ~180 days spans a full prep cycle.
 const MAX_MASTERY_HORIZON_DAYS: f64 = 180.0;
 
 /// Seconds per day, for horizon arithmetic.
@@ -65,8 +66,8 @@ const SECONDS_PER_DAY: f64 = 86_400.0;
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct TopicMastery {
-    /// Unweighted (equal per-card) mean FSRS retrievability over activated cards
-    /// (0..1), projected to the mastery horizon (see module docs).
+    /// Unweighted (equal per-card) mean FSRS retrievability over activated
+    /// cards (0..1), projected to the mastery horizon (see module docs).
     pub mastery: f32,
     /// Number of activated cards with FSRS memory state that contributed.
     pub card_count: usize,
@@ -115,10 +116,11 @@ impl Accumulator {
 
 impl Collection {
     /// How many seconds into the future to project retrievability for the
-    /// mastery pass. Prefers a configured exam date (so mastery reads as "chance
-    /// you'll still recall this on exam day"); otherwise the day-horizon config,
-    /// else [`DEFAULT_MASTERY_HORIZON_DAYS`]. Clamped to a sane maximum so a
-    /// distant/misconfigured date can't collapse every card to ~0.
+    /// mastery pass. Prefers a configured exam date (so mastery reads as
+    /// "chance you'll still recall this on exam day"); otherwise the
+    /// day-horizon config, else [`DEFAULT_MASTERY_HORIZON_DAYS`]. Clamped
+    /// to a sane maximum so a distant/misconfigured date can't collapse
+    /// every card to ~0.
     fn mastery_horizon_seconds(&self) -> u32 {
         let max_seconds = MAX_MASTERY_HORIZON_DAYS * SECONDS_PER_DAY;
         // A configured future exam date wins: project exactly to it.
@@ -145,12 +147,22 @@ impl Collection {
         // are excluded too: they carry topic:: tags and only grade, so counting
         // them would let raw question review skew the memory/weakness signal —
         // the model measures retention of the linked memory cards only.
+        // AI-generated flashcard variants are also excluded (review-only): a
+        // variant is a reworded copy of an existing fact, so counting it would
+        // double-count that fact's retention in the per-topic mastery.
         let search = SearchNode::Tag {
             tag: format!("{TOPIC_TAG_PREFIX}*"),
             mode: FieldSearchMode::Normal,
         }
         .and(StateKind::Suspended.negated())
-        .and(SearchNode::Notetype(QUESTION_NOTETYPE_NAME.into()).negated());
+        .and(SearchNode::Notetype(QUESTION_NOTETYPE_NAME.into()).negated())
+        .and(
+            SearchNode::Tag {
+                tag: BANK_AI_GENERATED_TAG.to_string(),
+                mode: FieldSearchMode::Normal,
+            }
+            .negated(),
+        );
         let cards = self.all_cards_for_search(search)?;
         if cards.is_empty() {
             return Ok(MasteryData::default());
@@ -293,8 +305,8 @@ mod test {
         col.update_cards_maybe_undoable(vec![card], false).unwrap();
     }
 
-    /// Add a graded note of the `SpeedrunQuestion` notetype (cloned from Basic),
-    /// carrying the given tags.
+    /// Add a graded note of the `SpeedrunQuestion` notetype (cloned from
+    /// Basic), carrying the given tags.
     fn add_question_note(col: &mut Collection, tags: &[&str]) -> Note {
         let ntid = match col.get_notetype_by_name(QUESTION_NOTETYPE_NAME).unwrap() {
             Some(nt) => nt.id,
@@ -316,8 +328,8 @@ mod test {
     }
 
     /// A graded practice-question card must not contribute to the mastery pass,
-    /// even though it carries a `topic::` tag and is not suspended — only linked
-    /// memory cards count.
+    /// even though it carries a `topic::` tag and is not suspended — only
+    /// linked memory cards count.
     #[test]
     fn question_cards_are_excluded_from_mastery() {
         let mut col = Collection::new();
@@ -336,11 +348,36 @@ mod test {
         );
     }
 
+    /// An AI-generated flashcard variant must not contribute to the mastery
+    /// pass, even though it is a non-suspended Basic card carrying a `topic::`
+    /// tag — a reworded copy of a fact would otherwise double-count it.
+    #[test]
+    fn ai_variant_cards_are_excluded_from_mastery() {
+        let mut col = Collection::new();
+
+        let memory_card = add_note_with_tags(&mut col, &["topic::mem"]);
+        grade_card(&mut col, &memory_card);
+        let variant = add_note_with_tags(&mut col, &["topic::aivar", "bank::ai-generated"]);
+        grade_card(&mut col, &variant);
+
+        let data = col.compute_topic_mastery().unwrap();
+        assert_eq!(
+            data.graded_count, 1,
+            "only the source memory card should count"
+        );
+        assert!(data.by_topic.contains_key("mem"));
+        assert!(
+            !data.by_topic.contains_key("aivar"),
+            "AI-variant topic must not appear in mastery"
+        );
+    }
+
     /// A card just reviewed with sub-day stability (i.e. lapsed / graded
     /// Again-Hard) must read materially lower mastery than a just-reviewed,
     /// high-stability one — even though both were reviewed *now* (elapsed≈0).
     /// Without horizon projection both would read ~1.0; with it, the low-
-    /// stability card decays below the strong one, so misses show up right away.
+    /// stability card decays below the strong one, so misses show up right
+    /// away.
     #[test]
     fn projection_penalizes_low_stability_cards() {
         let mut col = Collection::new();

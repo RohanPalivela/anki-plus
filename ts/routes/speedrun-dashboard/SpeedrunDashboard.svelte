@@ -3,7 +3,11 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <script lang="ts">
-    import { getMemoryScore, getPerformanceScore, getReadinessScore } from "@generated/backend";
+    import {
+        getMemoryScore,
+        getPerformanceScore,
+        getReadinessScore,
+    } from "@generated/backend";
     import type {
         MemoryScoreResponse,
         PerformanceScoreResponse,
@@ -106,7 +110,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 </div>
                 <div class="stat">
                     <span class="stat-label">{tr.speedrunDashboardCoverage()}</span>
-                    <span class="stat-value">{showScore ? pct(score.coverage) : "—"}</span>
+                    <span class="stat-value">
+                        {showScore ? pct(score.coverage) : "—"}
+                    </span>
                 </div>
                 <div class="stat">
                     <span class="stat-label">{tr.speedrunDashboardGraded()}</span>
