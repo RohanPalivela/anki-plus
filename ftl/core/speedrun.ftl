@@ -21,6 +21,7 @@ speedrun-import-bank-action = Import question bank…
 # Checkable master switch for AI features (grounded rephrasal).
 speedrun-ai-enable-action = Enable AI rewording
 speedrun-ai-generate-cards-action = Generate AI flashcard variants…
+speedrun-ai-cleanup-cards-action = Delete AI flashcard variants…
 
 ## Setup.
 
@@ -227,3 +228,13 @@ speedrun-ai-generate-complete =
     source card(s); { $blockedCount } candidate(s) blocked by the quality gate.
     Variants are suspended, sync like their source, and are excluded from the
     Memory score.
+speedrun-ai-generate-skipped-note =
+    { $skippedCount } already existed and were skipped (re-running is idempotent).
+speedrun-ai-generate-error-note =
+    { $errorCount } source card(s) could not be reworded — the AI provider
+    rejected the request. First error: { $firstError }
+speedrun-ai-cleanup-none = No AI-generated flashcard variants to delete.
+speedrun-ai-cleanup-confirm =
+    Delete { $count } AI-generated flashcard variant(s)? Your source cards and the
+    question bank are not affected. This can be undone.
+speedrun-ai-cleanup-complete = Deleted { $count } AI-generated flashcard variant(s).

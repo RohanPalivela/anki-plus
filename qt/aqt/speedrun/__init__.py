@@ -20,6 +20,9 @@ Adds a Tools → "Speedrun (MCAT)" submenu wiring up these actions:
 * **Generate AI flashcard variants** — reword the first-principles memory cards
   into grounded, source-checked variants (see :mod:`anki.speedrun_rephrase`);
   gated on the switch and on an OpenAI key/library being available.
+* **Delete AI flashcard variants** — the inverse: remove every
+  ``bank::ai-generated`` variant in one undoable step. Not gated on the switch,
+  so variants can be cleaned up after AI is turned off.
 
 This module is additive and fork-specific; it is wired in from
 ``AnkiQt.setupMenus`` with a single call to :func:`setup_speedrun_menu`.
@@ -78,6 +81,10 @@ def setup_speedrun_menu(mw: aqt.main.AnkiQt) -> None:
     qconnect(ai_toggle.triggered, lambda checked: set_ai_enabled(mw, checked))
     generate_cards_action = menu.addAction(tr.speedrun_ai_generate_cards_action())
     qconnect(generate_cards_action.triggered, lambda: run_generate_card_variants(mw))
+    # Cleanup is the inverse of generate and intentionally NOT gated on the
+    # switch: a user who turned AI off can still delete the variants it produced.
+    cleanup_cards_action = menu.addAction(tr.speedrun_ai_cleanup_cards_action())
+    qconnect(cleanup_cards_action.triggered, lambda: run_cleanup_card_variants(mw))
 
     def _sync_ai_menu() -> None:
         # Reflect the synced config each time the menu opens (it may have changed
@@ -268,21 +275,78 @@ def run_generate_card_variants(mw: aqt.main.AnkiQt) -> None:
 
     def on_success(summary: Any) -> None:
         mw.reset()
-        showInfo(
+        lines = [
             tr.speedrun_ai_generate_complete(
                 written_count=summary.written,
                 considered_count=summary.considered,
                 blocked_count=summary.blocked,
-            ),
-            parent=mw,
-            title=tr.speedrun_menu(),
-        )
+            )
+        ]
+        # Surface the buckets the headline count hides, so a run that silently
+        # errored on every call (or found everything already generated) is not
+        # mistaken for a no-op.
+        if summary.skipped_existing:
+            lines.append(
+                tr.speedrun_ai_generate_skipped_note(
+                    skipped_count=summary.skipped_existing
+                )
+            )
+        if summary.provider_errors:
+            lines.append(
+                tr.speedrun_ai_generate_error_note(
+                    error_count=summary.provider_errors,
+                    first_error=summary.first_error or "unknown",
+                )
+            )
+        showInfo("\n".join(lines), parent=mw, title=tr.speedrun_menu())
 
     QueryOp(
         parent=mw,
         op=lambda col: generate_card_variants(col, note_ids, provider=provider),
         success=on_success,
     ).with_progress(tr.speedrun_ai_generate_running()).run_in_background()
+
+
+def run_cleanup_card_variants(mw: aqt.main.AnkiQt) -> None:
+    """Delete every AI-generated flashcard variant (the inverse of generate).
+
+    Not gated on the AI switch, since a user who turned AI off still needs a way
+    to remove what it produced. Only notes tagged ``bank::ai-generated`` are
+    touched — the source first-principles cards and the question bank are left
+    alone — and the removal is a single, undoable, syncing operation.
+    """
+    if not mw.col:
+        showInfo(tr.speedrun_setup_no_collection(), parent=mw)
+        return
+
+    from anki.notes import NoteId
+    from anki.speedrun_rephrase import ai_variant_note_ids
+    from aqt.operations import CollectionOp
+
+    note_ids = ai_variant_note_ids(mw.col)
+    if not note_ids:
+        showInfo(tr.speedrun_ai_cleanup_none(), parent=mw, title=tr.speedrun_menu())
+        return
+    if not askUser(
+        tr.speedrun_ai_cleanup_confirm(count=len(note_ids)),
+        parent=mw,
+        title=tr.speedrun_menu(),
+    ):
+        return
+
+    removed = len(note_ids)
+
+    def on_success(_changes: Any) -> None:
+        tooltip(tr.speedrun_ai_cleanup_complete(count=removed), parent=mw)
+
+    def _cleanup(col: Any) -> OpChanges:
+        changes = col.remove_notes([NoteId(nid) for nid in note_ids])
+        # Purge the orphaned bank::/variant-of::/variantuid:: tags so a later
+        # regenerate is not wrongly skipped as "already existing".
+        col.tags.clear_unused_tags()
+        return changes
+
+    CollectionOp(parent=mw, op=_cleanup).success(on_success).run_in_background()
 
 
 def ensure_bank_imported(mw: aqt.main.AnkiQt) -> bool:

@@ -31,11 +31,13 @@ from anki.speedrun_rephrase import (
     RephrasedQuestion,
     SourceCard,
     SourceQuestion,
+    ai_variant_note_ids,
     generate_card_variants,
     generate_variants,
     jaccard,
     parse_card_provider_json,
     parse_provider_json,
+    remove_card_variants,
     rephrase_question,
     scan_leakage,
     tokens,
@@ -359,6 +361,34 @@ def test_generate_card_variants_writes_suspended_variant_and_is_idempotent():
     assert again.written == 0
     assert again.skipped_existing >= 1
     assert len(col.find_notes(f"tag:{AI_GENERATED_TAG}")) == 1
+
+
+def test_remove_card_variants_deletes_only_ai_notes():
+    col = getEmptyCol()
+    col.speedrun.setup_mcat()
+    col.speedrun.import_first_principles(cards=_first_principles_cards())
+    source_notes = col.db.scalar("select count() from notes")
+
+    generate_card_variants(col, provider=MockProvider())
+    assert len(ai_variant_note_ids(col)) == 1
+    assert col.db.scalar("select count() from notes") == source_notes + 1
+
+    removed = remove_card_variants(col)
+    assert removed == 1
+    # Only the AI variant is gone; the source first-principles card remains.
+    assert ai_variant_note_ids(col) == []
+    assert col.db.scalar("select count() from notes") == source_notes
+
+    # Idempotent: a second cleanup with nothing to remove is a clean no-op.
+    assert remove_card_variants(col) == 0
+
+    # Regression: after deletion the idempotency check must NOT treat the
+    # removed variant as still-existing (orphaned tags in the registry once
+    # caused this), so regeneration writes a fresh variant again.
+    regenerated = generate_card_variants(col, provider=MockProvider())
+    assert regenerated.written == 1
+    assert regenerated.skipped_existing == 0
+    assert len(ai_variant_note_ids(col)) == 1
 
 
 def test_ai_enabled_toggle_defaults_off_and_persists():

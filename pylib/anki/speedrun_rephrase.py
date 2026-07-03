@@ -994,8 +994,19 @@ def _build_variant_note(
 
 
 def _existing_variant_uids(col: anki.collection.Collection) -> set[str]:
+    """UIDs of variants that currently exist **as notes** (the idempotency key).
+
+    Derived from live notes rather than ``col.tags.all()``: Anki keeps a tag in
+    the registry even after every note carrying it is deleted, so reading the
+    registry would treat a *deleted* variant as still-existing and wrongly skip
+    regenerating it. Reading the notes makes "exists" mean what it says.
+    """
     prefix = VARIANT_UID_TAG_PREFIX
-    return {t[len(prefix) :] for t in col.tags.all() if t.startswith(prefix)}
+    uids: set[str] = set()
+    for nid in col.find_notes(f'"tag:{prefix}*"'):
+        note = col.get_note(nid)
+        uids.update(t[len(prefix) :] for t in note.tags if t.startswith(prefix))
+    return uids
 
 
 def _heldout_texts(col: anki.collection.Collection) -> list[str]:
@@ -1234,6 +1245,9 @@ class GenerateCardSummary:
     skipped_ai_source: int = 0
     rejected_malformed: int = 0
     provider_errors: int = 0
+    #: First provider exception seen (``"TypeName: message"``), so a run that
+    #: silently errors on every call can still report *why* to the user.
+    first_error: str = ""
     by_label: dict[str, int] = field(default_factory=dict)
 
     def _tally(self, label: str) -> None:
@@ -1321,8 +1335,10 @@ def generate_card_variants(
                 continue
             try:
                 variant = provider.rephrase_card(source)
-            except Exception:  # noqa: BLE001 — one bad call must not abort the batch
+            except Exception as exc:  # noqa: BLE001 — one bad call must not abort the batch
                 summary.provider_errors += 1
+                if not summary.first_error:
+                    summary.first_error = f"{type(exc).__name__}: {exc}"
                 continue
             grade = grader.grade(source, variant)
             summary._tally(grade.label)
@@ -1350,6 +1366,36 @@ def generate_card_variants(
         col.sched.suspend_cards(new_card_ids)
 
     return summary
+
+
+def ai_variant_note_ids(col: anki.collection.Collection) -> list[int]:
+    """Note ids of every AI-generated flashcard variant in the collection.
+
+    These are exactly the notes :func:`generate_card_variants` writes — tagged
+    ``bank::ai-generated`` — so the caller can count or remove them.
+    """
+    from anki.speedrun import BANK_AI_GENERATED_TAG
+
+    return [int(nid) for nid in col.find_notes(f'"tag:{BANK_AI_GENERATED_TAG}"')]
+
+
+def remove_card_variants(col: anki.collection.Collection) -> int:
+    """Delete all AI-generated flashcard variants and return how many were removed.
+
+    The inverse of :func:`generate_card_variants`: it removes only notes tagged
+    ``bank::ai-generated`` (source first-principles cards and the question bank
+    are untouched). Removal goes through ``col.remove_notes`` so it is a single
+    undoable operation that syncs like any other deletion.
+    """
+    from anki.notes import NoteId
+
+    note_ids = ai_variant_note_ids(col)
+    if note_ids:
+        col.remove_notes([NoteId(nid) for nid in note_ids])
+        # Drop the now-orphaned bank::/variant-of::/variantuid:: tags so they
+        # neither clutter the sidebar nor linger in the tag registry.
+        col.tags.clear_unused_tags()
+    return len(note_ids)
 
 
 # --- Top-level convenience ----------------------------------------------------
