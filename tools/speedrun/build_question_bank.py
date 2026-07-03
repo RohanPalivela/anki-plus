@@ -490,7 +490,9 @@ def main() -> None:
     # maintain the vendored file, so a network regen and an offline `curate.py
     # --in-place` stay consistent (blueprint-shaped, length-capped, concept-
     # mapped served pool + proportional heldout).
-    from curate import build_curated_bank  # local tool import (same dir)
+    from curate import (
+        build_curated_bank,  # type: ignore[import-not-found]  # local tool import (same dir)
+    )
 
     bank_dict, report = build_curated_bank(asdict(raw_bank))
     print("Curation report:", json.dumps(report, indent=2))
