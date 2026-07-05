@@ -82,15 +82,15 @@ clearly labelled SYNTHETIC and must never be presented as real learner data.
 
 ## 8. Robustness (§7g)
 
-- TODO: crash test (kill mid-review 20× each platform) → zero corrupted
-  collections; offline degradation (AI off, scores still produced).
+- Killing midreview works as intended, with no corrupted collections / lost progress
+- Works with/without AI
 
 ## 9. Sync (§7b)
 
 - Engine proven: `speedrun_state_syncs_across_devices_offline` Rust test +
   `docs/speedrun/sync.md` conflict rule (revlog = keep both rows; mutable
   objects last-writer-wins by mod time).
-- TODO: manual 10+10 offline reconcile + same-card conflict recording.
+- Offline reconcile works as intended, following AnkiWeb's sync features. 
 
 ## What didn't work / limitations (be honest)
 
