@@ -60,10 +60,15 @@ just android-run --rebuild    # rebuild backend + app first (after changing Spee
    `revlog`, blueprint config) propagate — they are native Anki objects, so
    existing sync carries them to the phone, which runs the **same Rust engine**.
 
-> **What this proves vs. not.** This demonstrates the shared engine + full data
-> sync (including all Speedrun objects) on Android. The Speedrun **Kotlin UI**
-> (question surface, score tiles) is not built into AnkiDroid yet — that is the
-> M2 mobile-UI task. The RPCs are present and callable in the app's backend.
+> **What this proves.** This demonstrates the shared engine + full data sync
+> (including all Speedrun objects) on Android. The Speedrun **Kotlin UI is built**
+> in the fork: native question-first study with the four miss-reasons and gated
+> activation (`SpeedrunStudyActivity`), a guided session (`SpeedrunSessionActivity`),
+> and the three score tiles via the shared Svelte home/dashboard in a WebView
+> (`SpeedrunHomePage` / `SpeedrunDashboardPage`), all calling the same Rust RPCs
+> (`activateCardsForMiss`, `getMemoryScore`, `getPerformanceScore`,
+> `getReadinessScore`). Scores abstain ("—") until enough graded reviews /
+> coverage, so study a short session (or import the bank) before a demo.
 
 ### Configuration knobs (env vars for both scripts)
 
