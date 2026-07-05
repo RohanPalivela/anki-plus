@@ -74,6 +74,17 @@ def setup_speedrun_menu(mw: aqt.main.AnkiQt) -> None:
     qconnect(import_bank_action.triggered, lambda: run_import_bank(mw))
 
     menu.addSeparator()
+    # Eval-only surfaces (brief §7d / §9). These generate the *real* held-out and
+    # paraphrase revlog the validation harnesses read; plain-English labels keep
+    # this fork tooling off the translated string API.
+    heldout_action = menu.addAction("Study held-out questions (eval)")
+    qconnect(heldout_action.triggered, lambda: open_heldout_study(mw))
+    import_paraphrase_action = menu.addAction("Import paraphrase set (eval)")
+    qconnect(import_paraphrase_action.triggered, lambda: run_import_paraphrase(mw))
+    paraphrase_study_action = menu.addAction("Study paraphrase questions (eval)")
+    qconnect(paraphrase_study_action.triggered, lambda: open_paraphrase_study(mw))
+
+    menu.addSeparator()
     # Master AI switch (checkable) + the generation action it gates. Off by
     # default; the app scores fine with AI disabled.
     ai_toggle = menu.addAction(tr.speedrun_ai_enable_action())
@@ -394,6 +405,123 @@ def open_study(mw: aqt.main.AnkiQt) -> None:
     from aqt.speedrun.study import SpeedrunStudyDialog
 
     SpeedrunStudyDialog(mw)
+
+
+#: How many held-out questions to present per eval sitting. The pool is large
+#: (~1 in N of the bank); a random sample of this size gives the Performance
+#: validation harness enough spread across difficulty for a stable AUC without
+#: forcing the grader to sit through the whole held-out split.
+_HELDOUT_EVAL_BATCH = 60
+
+
+def open_heldout_study(mw: aqt.main.AnkiQt) -> None:
+    """Answer a random batch of held-out questions, auto-graded into revlog.
+
+    Held-out questions are never served by normal study (they are the evaluation
+    split), so this is the only in-app way to produce the real held-out answers
+    ``just speedrun-validate`` reads for the Performance accuracy/AUC metric. No
+    cards are activated (MODE_HELDOUT), so answering them can't leak into the
+    served-pool models.
+    """
+    import random
+
+    if not mw.col:
+        showInfo(tr.speedrun_setup_no_collection(), parent=mw)
+        return
+    if not ensure_bank_imported(mw):
+        return
+    note_ids = mw.col.speedrun.heldout_question_note_ids()
+    if not note_ids:
+        showInfo(
+            "No held-out questions found. Import the question bank first "
+            "(Tools ▸ Speedrun ▸ Import question bank).",
+            parent=mw,
+            title=tr.speedrun_menu(),
+        )
+        return
+    if len(note_ids) > _HELDOUT_EVAL_BATCH:
+        note_ids = random.sample(note_ids, _HELDOUT_EVAL_BATCH)
+
+    from aqt.speedrun.study import MODE_HELDOUT, SpeedrunStudyDialog
+
+    SpeedrunStudyDialog(
+        mw,
+        note_ids=note_ids,
+        mode=MODE_HELDOUT,
+        title="Held-out questions (eval)",
+        allow_sweep=False,
+    )
+
+
+def run_import_paraphrase(mw: aqt.main.AnkiQt) -> None:
+    """Import the eval-only paraphrase transfer set as native notes.
+
+    Creates 30 memory *lessons* (``Speedrun::Paraphrase::Lessons``) and their 60
+    reworded *questions* (``Speedrun::Paraphrase::Questions``). Idempotent, so
+    re-running only adds what's missing.
+    """
+    if not mw.col:
+        showInfo(tr.speedrun_setup_no_collection(), parent=mw)
+        return
+    mw.progress.start(label="Importing paraphrase set…", immediate=True)
+    summary = None
+    try:
+        summary = mw.col.speedrun.import_paraphrase_set()
+    except FileNotFoundError:
+        summary = None
+    finally:
+        mw.progress.finish()
+    if summary is None:
+        showInfo(
+            "Paraphrase set data not found.", parent=mw, title=tr.speedrun_menu()
+        )
+        return
+    mw.reset()
+    showInfo(
+        "Imported paraphrase set: "
+        f"{summary.lessons_added} lessons + {summary.questions_added} reworded "
+        f"questions ({summary.skipped_existing} already present).\n\n"
+        "Next: study the lessons in 'Speedrun::Paraphrase::Lessons' (normal "
+        "reviewer) to build recall, answer the reworded questions via "
+        "Tools ▸ Speedrun ▸ Study paraphrase questions (eval), then run "
+        "'just speedrun-paraphrase --collection <copy>'.",
+        parent=mw,
+        title=tr.speedrun_menu(),
+    )
+
+
+def open_paraphrase_study(mw: aqt.main.AnkiQt) -> None:
+    """Answer the reworded paraphrase questions, auto-graded into revlog.
+
+    Feeds the reworded-accuracy side of the paraphrase transfer test. Like the
+    held-out surface it activates no cards (MODE_HELDOUT)."""
+    if not mw.col:
+        showInfo(tr.speedrun_setup_no_collection(), parent=mw)
+        return
+    if not mw.col.speedrun.has_paraphrase_set():
+        showInfo(
+            "The paraphrase set isn't imported yet. Run "
+            "Tools ▸ Speedrun ▸ Import paraphrase set (eval) first.",
+            parent=mw,
+            title=tr.speedrun_menu(),
+        )
+        return
+    note_ids = mw.col.speedrun.paraphrase_question_note_ids()
+    if not note_ids:
+        showInfo(
+            "No paraphrase questions found.", parent=mw, title=tr.speedrun_menu()
+        )
+        return
+
+    from aqt.speedrun.study import MODE_HELDOUT, SpeedrunStudyDialog
+
+    SpeedrunStudyDialog(
+        mw,
+        note_ids=note_ids,
+        mode=MODE_HELDOUT,
+        title="Paraphrase questions (eval)",
+        allow_sweep=False,
+    )
 
 
 def fsrs_enabled(mw: aqt.main.AnkiQt) -> bool:

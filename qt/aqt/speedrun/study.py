@@ -48,20 +48,29 @@ from aqt.utils import disable_help_button, restoreGeom, saveGeom, tooltip, tr
 MODE_STANDALONE = "standalone"
 MODE_PRACTICE = "practice"
 MODE_RECAP = "recap"
+#: Eval-only surface: auto-grades held-out or paraphrase questions into revlog
+#: (so the validation/paraphrase harnesses have real answers) without ever
+#: activating cards. UI-wise it behaves like a standalone tool window.
+MODE_HELDOUT = "heldout"
+
+#: Modes that behave like a standalone tool window (own Close button, reset the
+#: main window on close, no "Continue"/finish-callback session semantics).
+_STANDALONE_LIKE_MODES = (MODE_STANDALONE, MODE_HELDOUT)
 
 
 def offers_activation(mode: str, is_correct: bool) -> bool:
     """Whether a wrong answer in ``mode`` should offer the miss-reason chooser.
 
     The chooser is the only path that can unsuspend/activate linked memory
-    cards. RECAP deliberately returns ``False``: recap re-tests the *same
-    material* the student just practised, so a wrong recap answer only reveals
-    the correct answer + explanation (no activation side effects, no unlocking
-    of new cards). Grading via the native answer path still happens either way,
-    so recap accuracy is recorded in ``revlog``. Kept as a tiny pure function so
-    the recap-never-activates invariant is unit-testable.
+    cards. RECAP and HELDOUT deliberately return ``False``: recap re-tests the
+    *same material* the student just practised, and held-out/paraphrase are pure
+    *evaluation* surfaces — a wrong answer only reveals the correct answer +
+    explanation (no activation side effects, no unlocking of new cards). Grading
+    via the native answer path still happens either way, so accuracy is recorded
+    in ``revlog``. Kept as a tiny pure function so the never-activates invariant
+    is unit-testable.
     """
-    return not is_correct and mode != MODE_RECAP
+    return not is_correct and mode not in (MODE_RECAP, MODE_HELDOUT)
 
 
 # (MissReason, label, hint) for the four chooser buttons.
@@ -280,7 +289,7 @@ class SpeedrunStudyDialog(QDialog):
         # "close a tool window", so label it accordingly.
         close_label = (
             tr.actions_close()
-            if self.mode == MODE_STANDALONE
+            if self.mode in _STANDALONE_LIKE_MODES
             else tr.speedrun_session_stop()
         )
         close_button = QPushButton(close_label)
@@ -481,7 +490,7 @@ class SpeedrunStudyDialog(QDialog):
         self.progress_label.setText("")
         self.stem_label.setText(tr.speedrun_study_no_questions())
         self.sweep_button.setEnabled(False)
-        if self.mode != MODE_STANDALONE:
+        if self.mode not in _STANDALONE_LIKE_MODES:
             # Nothing to do this phase; let the controller advance on close.
             self._completed = True
             self._at_end = True
@@ -497,7 +506,7 @@ class SpeedrunStudyDialog(QDialog):
         self.progress_label.setText("")
         self.topic_label.setText("")
         self.stem_label.setText(tr.speedrun_study_finished())
-        if self.mode == MODE_STANDALONE:
+        if self.mode in _STANDALONE_LIKE_MODES:
             self.next_button.setVisible(False)
             return
         # Session: reaching the end means this phase completed successfully.
@@ -536,7 +545,7 @@ class SpeedrunStudyDialog(QDialog):
         # Standalone reflects new revlog entries / activated cards immediately;
         # in a session the controller owns the next transition, so don't reset
         # the main window out from under it.
-        if self._dirty and self.mode == MODE_STANDALONE:
+        if self._dirty and self.mode in _STANDALONE_LIKE_MODES:
             self.mw.reset()
         self._emit_finish()
         QDialog.reject(self)

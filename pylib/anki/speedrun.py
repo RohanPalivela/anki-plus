@@ -87,6 +87,12 @@ QUESTION_FIELDS = (
 QUESTIONS_DECK_NAME = "Speedrun::Questions"
 #: Linked flashcards (normal notes, suspended by default) live here.
 FLASHCARDS_DECK_NAME = "Speedrun::Cards"
+#: Eval-only paraphrase set (brief §7d transfer test). The memory *lessons* and
+#: the reworded *questions* live in separate subdecks so a learner can review
+#: the lessons in the normal reviewer (to build FSRS recall) while the reworded
+#: questions are answered — auto-graded — via the Tools ▸ Speedrun eval action.
+PARAPHRASE_LESSONS_DECK_NAME = "Speedrun::Paraphrase::Lessons"
+PARAPHRASE_QUESTIONS_DECK_NAME = "Speedrun::Paraphrase::Questions"
 
 # Tag taxonomy (must match the Rust engine's constants).
 TOPIC_TAG_PREFIX = "topic::"
@@ -192,6 +198,33 @@ def load_first_principles(path: str | Path | None = None) -> dict[str, Any]:
 
 #: Vendored concept taxonomy shipped next to this module.
 DEFAULT_CONCEPTS_PATH = Path(__file__).parent / "data" / "speedrun_concepts.json"
+
+
+#: Eval-only paraphrase transfer set (brief §7d): 30 memory lessons, each paired
+#: with 2 reworded exam-style questions. Vendored next to this module so the
+#: importer works offline; also mirrored at ``tools/speedrun/data`` for the
+#: pure-Python ``just speedrun-paraphrase`` harness.
+DEFAULT_PARAPHRASE_PATH = Path(__file__).parent / "data" / "speedrun_paraphrase.json"
+#: Marker tag on every paraphrase-set note (find/remove/report the whole set).
+PARAPHRASE_TAG = "speedrun-paraphrase"
+#: Per-reworded-question tag the paraphrase harness reads (``paraphrase::<id>``);
+#: its ``_reworded_accuracy`` matches a card's reworded answers by this tag.
+PARAPHRASE_QUESTION_TAG_PREFIX = "paraphrase::"
+#: Per-lesson marker (``paraphrase-lesson::<id>``) for idempotent re-import.
+PARAPHRASE_LESSON_TAG_PREFIX = "paraphrase-lesson::"
+#: Per-reworded-question stable id (``paraphraseq::<id>-<n>``) for idempotency.
+PARAPHRASE_QUESTION_UID_TAG_PREFIX = "paraphraseq::"
+
+
+def load_paraphrase_set(path: str | Path | None = None) -> dict[str, Any]:
+    """Load and parse the vendored paraphrase transfer set JSON.
+
+    Kept module-level so tooling and tests can read the set without a
+    collection. ``path`` defaults to the vendored JSON.
+    """
+    p = Path(path) if path is not None else DEFAULT_PARAPHRASE_PATH
+    with open(p, encoding="utf-8") as fh:
+        return json.load(fh)
 
 
 def load_concepts(path: str | Path | None = None) -> dict[str, Any]:
@@ -351,6 +384,19 @@ class FirstPrinciplesImportSummary:
     skipped_existing: int = 0
     suspended: int = 0
     by_topic: dict[str, int] = field(default_factory=dict)
+
+
+@dataclass
+class ParaphraseImportSummary:
+    """Outcome of importing the eval-only paraphrase transfer set."""
+
+    total_cards: int = 0
+    #: Memory lesson (``Basic``) notes added to ``Speedrun::Paraphrase::Lessons``.
+    lessons_added: int = 0
+    #: Reworded ``SpeedrunQuestion`` notes added to the Questions subdeck.
+    questions_added: int = 0
+    #: Items skipped because they were already imported (idempotent re-run).
+    skipped_existing: int = 0
 
 
 @dataclass
@@ -1030,6 +1076,96 @@ class Speedrun:
         """True if any first-principles memory cards have been imported."""
         return bool(self.col.find_notes(f"tag:{FIRST_PRINCIPLES_TAG}"))
 
+    # Paraphrase transfer set (eval-only, brief §7d) ----------------------------
+    #
+    # Proves the Performance model measures *transfer*, not card memorization: a
+    # learner studies 30 memory *lessons* (so FSRS gives each a real recall) and
+    # answers 2 reworded exam-style questions per lesson. ``just
+    # speedrun-paraphrase`` then reports gap = recall − reworded-accuracy. This is
+    # deliberately separate from the served/heldout pools: paraphrase questions
+    # are never scored by the Memory/Performance models and never activate cards.
+
+    def import_paraphrase_set(
+        self,
+        path: str | Path | None = None,
+        *,
+        cards: list[dict[str, Any]] | None = None,
+    ) -> ParaphraseImportSummary:
+        """Import the vendored paraphrase transfer set as native notes.
+
+        Each item becomes a ``Basic`` *lesson* note (matched later by front text
+        for card recall) plus its 2 reworded ``SpeedrunQuestion`` notes tagged
+        ``paraphrase::<card_id>`` (matched by the harness for reworded accuracy).
+        Idempotent via per-item ``paraphrase-lesson::``/``paraphraseq::`` tags, so
+        re-running — or running after the set has synced from another device —
+        never duplicates. Pass ``cards`` to import an in-memory list (tests);
+        otherwise the vendored JSON is read.
+        """
+        if cards is None:
+            cards = load_paraphrase_set(path).get("cards", [])
+
+        qnotetype_id = self.ensure_question_notetype()
+        qnotetype = self.col.models.get(qnotetype_id)
+        assert qnotetype is not None
+        basic = self.col.models.by_name(FLASHCARD_NOTETYPE_NAME)
+        assert basic is not None, "stock Basic notetype must exist"
+        lessons_deck = self.col.decks.id(PARAPHRASE_LESSONS_DECK_NAME)
+        questions_deck = self.col.decks.id(PARAPHRASE_QUESTIONS_DECK_NAME)
+
+        summary = ParaphraseImportSummary(total_cards=len(cards))
+        for card in cards:
+            cid = str(card.get("card_id", "")).strip()
+            if not cid:
+                continue
+            topic = str(card.get("topic", "")).strip()
+            topic_tags = [f"{TOPIC_TAG_PREFIX}{topic}"] if topic else []
+
+            lesson_tag = f"{PARAPHRASE_LESSON_TAG_PREFIX}{cid}"
+            if self.col.find_notes(f"tag:{lesson_tag}"):
+                summary.skipped_existing += 1
+            else:
+                note = self.col.new_note(basic)
+                note["Front"] = str(card.get("card_front", ""))
+                note["Back"] = str(card.get("card_back", ""))
+                note.tags = [PARAPHRASE_TAG, lesson_tag, *topic_tags]
+                self.col.add_note(note, lessons_deck)
+                summary.lessons_added += 1
+
+            for idx, reworded in enumerate(card.get("reworded", [])):
+                uid_tag = f"{PARAPHRASE_QUESTION_UID_TAG_PREFIX}{cid}-{idx}"
+                if self.col.find_notes(f"tag:{uid_tag}"):
+                    continue
+                options = [str(o) for o in reworded.get("options", [])]
+                note = self.col.new_note(qnotetype)
+                note["stem"] = str(reworded.get("stem", ""))
+                note["options"] = "\n".join(" ".join(o.split()) for o in options)
+                # The set stores ``correct`` as a 0-based index; SpeedrunQuestion
+                # expects a letter/1-based number (see ``correct_index``).
+                note["correct"] = chr(ord("A") + int(reworded.get("correct", 0)))
+                note["explanation"] = str(card.get("card_back", ""))
+                note["source"] = str(card.get("source", ""))
+                note.tags = [
+                    PARAPHRASE_TAG,
+                    f"{PARAPHRASE_QUESTION_TAG_PREFIX}{cid}",
+                    uid_tag,
+                    *topic_tags,
+                ]
+                self.col.add_note(note, questions_deck)
+                summary.questions_added += 1
+        return summary
+
+    def has_paraphrase_set(self) -> bool:
+        """True if the paraphrase transfer set has been imported."""
+        return bool(self.col.find_notes(f"tag:{PARAPHRASE_TAG}"))
+
+    def paraphrase_question_note_ids(self) -> list[NoteId]:
+        """Reworded paraphrase question note ids, in stable creation order.
+
+        These are answered — auto-graded — via the eval study surface so the
+        paraphrase harness can compute reworded accuracy from real revlog."""
+        query = f"note:{QUESTION_NOTETYPE_NAME} tag:{PARAPHRASE_QUESTION_TAG_PREFIX}*"
+        return list(self.col.find_notes(query))
+
     # Precise question -> first-principles linkage (gates::) --------------------
     #
     # ``gates::<note_id>`` makes a missed question activate exactly the memory
@@ -1338,6 +1474,16 @@ class Speedrun:
             f"note:{QUESTION_NOTETYPE_NAME} tag:{POOL_SERVED_TAG} "
             f"-tag:{POOL_HELDOUT_TAG}"
         )
+        return list(self.col.find_notes(query))
+
+    def heldout_question_note_ids(self) -> list[NoteId]:
+        """Note ids of held-out practice questions, in stable creation order.
+
+        Held-out questions are never served by the study loop or fitted by the
+        models (they are the evaluation split). This helper exists only so the
+        eval study surface can present them for auto-graded answering, producing
+        the real held-out revlog the Performance validation harness reads."""
+        query = f"note:{QUESTION_NOTETYPE_NAME} tag:{POOL_HELDOUT_TAG}"
         return list(self.col.find_notes(query))
 
     def interleaving_enabled(self) -> bool:

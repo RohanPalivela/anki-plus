@@ -14,6 +14,7 @@ dialog.
 """
 
 from aqt.speedrun.study import (
+    MODE_HELDOUT,
     MODE_PRACTICE,
     MODE_RECAP,
     MODE_STANDALONE,
@@ -27,6 +28,13 @@ def test_recap_wrong_answer_never_activates_cards():
     assert offers_activation(MODE_RECAP, is_correct=False) is False
 
 
+def test_heldout_wrong_answer_never_activates_cards():
+    # Held-out / paraphrase are pure evaluation surfaces: a wrong answer is
+    # graded into revlog but must never offer the miss chooser (no activation),
+    # so answering the eval split can't leak into the served-pool models.
+    assert offers_activation(MODE_HELDOUT, is_correct=False) is False
+
+
 def test_practice_and_standalone_still_activate_on_miss():
     # The Practice phase and standalone study keep the gating loop: a wrong
     # answer offers the miss-reason chooser (which can activate linked cards).
@@ -36,5 +44,5 @@ def test_practice_and_standalone_still_activate_on_miss():
 
 def test_correct_answer_never_activates_in_any_mode():
     # A correct answer never routes through the miss/activation path.
-    for mode in (MODE_RECAP, MODE_PRACTICE, MODE_STANDALONE):
+    for mode in (MODE_RECAP, MODE_PRACTICE, MODE_STANDALONE, MODE_HELDOUT):
         assert offers_activation(mode, is_correct=True) is False

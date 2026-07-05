@@ -1168,3 +1168,76 @@ def test_curriculum_to_dict_is_json_shaped():
         "accuracy",
         "practiced",
     }
+
+
+def _sample_paraphrase():
+    return [
+        {
+            "card_id": "bc1",
+            "topic": "biochem",
+            "source": "FP: Enzyme Kinetics",
+            "card_front": "What does a competitive inhibitor do to Km and Vmax?",
+            "card_back": "Increases apparent Km; Vmax unchanged.",
+            "reworded": [
+                {"stem": "Adding a substrate mimic will most likely:",
+                 "options": ["Raise Km", "Lower both", "Raise Vmax", "No change"],
+                 "correct": 0},
+                {"stem": "At very high substrate, the rate:",
+                 "options": ["Can't reach max", "Reaches max", "Zero", "Doubles"],
+                 "correct": 1},
+            ],
+        },
+    ]
+
+
+def test_import_paraphrase_set_native_split_and_idempotent():
+    from anki.speedrun import (
+        PARAPHRASE_LESSONS_DECK_NAME,
+        PARAPHRASE_QUESTION_TAG_PREFIX,
+        PARAPHRASE_QUESTIONS_DECK_NAME,
+        PARAPHRASE_TAG,
+        correct_index,
+        option_lines,
+    )
+
+    col = getEmptyCol()
+    col.speedrun.setup_mcat()
+
+    summary = col.speedrun.import_paraphrase_set(cards=_sample_paraphrase())
+    assert summary.total_cards == 1
+    assert summary.lessons_added == 1
+    assert summary.questions_added == 2
+    assert summary.skipped_existing == 0
+    assert col.speedrun.has_paraphrase_set()
+
+    # Lesson is a native Basic note in the Lessons subdeck, front-searchable.
+    lessons_deck = col.decks.id_for_name(PARAPHRASE_LESSONS_DECK_NAME)
+    lesson_nids = col.find_notes(f"tag:{PARAPHRASE_TAG} note:Basic")
+    assert len(lesson_nids) == 1
+    lesson = col.get_note(lesson_nids[0])
+    assert "competitive inhibitor" in lesson["Front"]
+    assert all(c.did == lessons_deck for c in lesson.cards())
+
+    # Reworded questions are SpeedrunQuestion notes tagged paraphrase::<id>, and
+    # the 0-based ``correct`` maps to a valid gradeable option index.
+    q_nids = col.speedrun.paraphrase_question_note_ids()
+    assert len(q_nids) == 2
+    questions_deck = col.decks.id_for_name(PARAPHRASE_QUESTIONS_DECK_NAME)
+    for nid in q_nids:
+        note = col.get_note(nid)
+        assert note.note_type()["name"] == QUESTION_NOTETYPE_NAME
+        assert f"{PARAPHRASE_QUESTION_TAG_PREFIX}bc1" in note.tags
+        idx = correct_index(note["correct"], len(option_lines(note["options"])))
+        assert idx >= 0
+        assert all(c.did == questions_deck for c in note.cards())
+
+    # Paraphrase questions are NOT part of the served/heldout pools.
+    assert col.speedrun.served_question_note_ids() == []
+    assert col.speedrun.heldout_question_note_ids() == []
+
+    # Re-import adds nothing (idempotent -> conflict-free sync).
+    note_count = col.db.scalar("select count() from notes")
+    summary2 = col.speedrun.import_paraphrase_set(cards=_sample_paraphrase())
+    assert summary2.lessons_added == 0
+    assert summary2.questions_added == 0
+    assert col.db.scalar("select count() from notes") == note_count
