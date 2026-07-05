@@ -7,11 +7,11 @@ clearly labelled SYNTHETIC and must never be presented as real learner data.
 
 > **Real data source.** Runs below marked REAL use the author's own studied
 > collection (profile `hello`): 4,996 cards, spanning 2026-07-02 → 2026-07-05,
-> plus a **60-question held-out eval pass** answered in-app on 2026-07-05 (via
-> Tools ▸ Speedrun ▸ Study held-out questions) to populate the Performance
-> split. All harnesses were run against a read-only copy so the live collection
-> was never mutated. The dataset is real but small, so some metrics carry wide
-> uncertainty — flagged inline.
+> plus a **60-question held-out eval pass** and a **paraphrase pass** (30 lessons
+> studied + 60 reworded questions answered) done in-app on 2026-07-05 via
+> Tools ▸ Speedrun. All harnesses were run against a read-only copy so the live
+> collection was never mutated. The dataset is real but small, so some metrics
+> carry wide uncertainty — flagged inline.
 
 ## 1. Memory calibration (held-out) — `just speedrun-validate`
 
@@ -35,9 +35,14 @@ clearly labelled SYNTHETIC and must never be presented as real learner data.
 
 ## 3. Paraphrase gap — `just speedrun-paraphrase`
 
-- **REAL (2026-07-05):** "no results" — the 30-item paraphrase set has not been
-  imported + studied in this collection, so there is no recall-vs-reworded pair
-  yet. Harness verified; awaiting a studied paraphrase set.
+- **REAL (2026-07-05):** n=19 cards with both signals — mean card **recall
+  0.953** vs mean **reworded accuracy 0.763**, **gap +0.190**
+  [per-card −0.29..+0.97]; verdict **MEANINGFUL GAP — performance ≠ memory
+  (bridge exists)**. Per-topic gaps vary honestly (orgo +0.79, gen-chem/sociology
+  +0.24, biochem −0.13), i.e. the two models diverge rather than the performance
+  score echoing recall. Caveat: recall was measured right after studying the
+  lessons, so recall runs high; the *direction and size* of the gap are the
+  point. Full run: `artifacts/paraphrase_report.json`.
 - Reference (SYNTHETIC, penalty 0.18): recall 0.769 vs reworded 0.589,
   **gap +0.180** (performance ≠ memory). Null control (penalty 0): gap ≈ 0.
 
@@ -96,6 +101,6 @@ clearly labelled SYNTHETIC and must never be presented as real learner data.
   the production RPC path is being finalized (WS7).
 - Memory uses an unweighted (not stability-weighted) mean — a deliberate,
   documented deviation from the original plan wording.
-- Memory + Performance held-out numbers are now REAL (studied in-app 2026-07-05);
-  the **paraphrase gap** is the last one still pending real data — import the set
-  and answer the reworded questions (Tools ▸ Speedrun) to populate it.
+- Memory, Performance held-out, and the paraphrase gap are now all REAL (studied
+  in-app 2026-07-05); the ablation is a labelled simulation and robustness/sync
+  device passes remain the honest TODOs.
