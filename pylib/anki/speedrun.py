@@ -254,6 +254,16 @@ SESSION_SCOPE_CONFIG_KEY = "speedrunSessionScope"
 #: entry points can back-fill legacy collections exactly once instead of
 #: re-scanning the whole served pool on every launch.
 GATES_LINKED_CONFIG_KEY = "speedrunGatesLinked"
+#: Whether served practice questions are INTERLEAVED across topics (the default,
+#: desirable-difficulty behaviour) or served BLOCKED — all of one topic before
+#: the next. Stored in the synced collection config and ON by default, so
+#: existing behaviour is unchanged unless a learner (or the WS5 ablation
+#: experiment) explicitly turns interleaving off. This is the single switch the
+#: study-feature ablation flips; see ``docs/speedrun/ablation.md`` and
+#: ``tools/speedrun/ablation.py``. Read via :meth:`Speedrun.interleaving_enabled`
+#: and honoured by :meth:`Speedrun.served_questions_interleaved` (hence by the
+#: guided-session controller) so no call site has to branch on it.
+INTERLEAVING_CONFIG_KEY = "speedrunInterleaving"
 
 # Guided-session per-phase caps (Tier 2). Tunable via collection config so the
 # fixed sequence never floods the student (adaptive/capped sizing). Defaults are
@@ -470,6 +480,20 @@ def _round_robin(groups: list[list[NoteId]]) -> list[NoteId]:
                 result.append(group[cursors[i]])
                 cursors[i] += 1
                 remaining -= 1
+    return result
+
+
+def _blocked(groups: list[list[NoteId]]) -> list[NoteId]:
+    """Concatenate per-topic note-id lists so every item of one topic precedes
+    the next topic's — *blocked* practice, i.e. the ablation of interleaving.
+
+    The counterpart to :func:`_round_robin`: given the same per-topic groups it
+    returns the exact same multiset of note ids, only ungrouped-then-regrouped
+    rather than interleaved, so the two orderings serve an identical question
+    pool at equal study time (the property the WS5 ablation relies on)."""
+    result: list[NoteId] = []
+    for group in groups:
+        result.extend(group)
     return result
 
 
@@ -1314,6 +1338,24 @@ class Speedrun:
         )
         return list(self.col.find_notes(query))
 
+    def interleaving_enabled(self) -> bool:
+        """Whether practice questions are served INTERLEAVED across topics
+        (default) rather than BLOCKED by topic.
+
+        Reads :data:`INTERLEAVING_CONFIG_KEY` from the synced collection config,
+        defaulting to ``True`` so behaviour is unchanged unless a learner (or the
+        WS5 study-feature ablation) explicitly turns interleaving off. This is
+        the single learning-science feature the ablation experiment toggles."""
+        return bool(self.col.get_config(INTERLEAVING_CONFIG_KEY, True))
+
+    def set_interleaving_enabled(self, enabled: bool) -> None:
+        """Persist the interleaving preference in the synced collection config.
+
+        Turning it off is the *ablation* build: the same served pool is then
+        delivered blocked-by-topic instead of interleaved (see
+        ``docs/speedrun/ablation.md``)."""
+        self.col.set_config(INTERLEAVING_CONFIG_KEY, bool(enabled))
+
     def served_questions_interleaved(
         self,
         *,
@@ -1321,8 +1363,18 @@ class Speedrun:
         concepts: set[str] | None = None,
         exclude: set[int] | None = None,
         unseen_first: bool = False,
+        interleave: bool | None = None,
     ) -> list[NoteId]:
-        """Served question note ids interleaved across topics (no topic blocking).
+        """Served question note ids ordered across topics for the study loop.
+
+        When interleaving is enabled (the default) consecutive items differ in
+        topic (round-robin); when it is disabled the same pool is served BLOCKED
+        — all of one topic before the next. ``interleave`` overrides the
+        per-collection :meth:`interleaving_enabled` flag (``None`` = honour it);
+        callers pass it only to force an ordering (e.g. the ablation harness),
+        so the guided session automatically respects the learner's preference
+        without branching. The method name is retained for call-site/Android
+        parity even though it now serves either ordering.
 
         ``topics`` restricts the result to those bare topic names; ``exclude``
         drops specific note ids (used to keep the recap set disjoint from
@@ -1353,6 +1405,9 @@ class Speedrun:
         grows.
         """
         exclude = exclude or set()
+        if interleave is None:
+            interleave = self.interleaving_enabled()
+        order = _round_robin if interleave else _blocked
 
         def in_scope(nid: NoteId) -> str | None:
             """Return the bare topic (round-robin key) if ``nid`` is in scope,
@@ -1379,7 +1434,7 @@ class Speedrun:
                 if topic is None:
                     continue
                 groups.setdefault(topic, []).append(nid)
-            return _round_robin(list(groups.values()))
+            return order(list(groups.values()))
 
         # Partition into never-practised vs. practised. Practised questions are
         # sorted oldest-review-first so, once the pool is exhausted, repeats
