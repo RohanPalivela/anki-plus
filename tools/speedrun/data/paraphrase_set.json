@@ -1,0 +1,185 @@
+{
+  "_about": "Speedrun paraphrase test set (brief §7d): 30 cards, each with 2 exam-style questions that test the SAME idea in new words. Used by tools/speedrun/paraphrase_test.py to compare card recall vs reworded-question accuracy and report the gap (proves the Performance model measures transfer, not just card memory). 'correct' is the 0-based index into 'options'. Grounded in the MCAT first-principles topics.",
+  "cards": [
+    {"card_id": "bc1", "topic": "biochem", "source": "FP: Enzyme Kinetics",
+     "card_front": "What does a competitive inhibitor do to Km and Vmax?", "card_back": "Increases apparent Km; Vmax unchanged.",
+     "reworded": [
+       {"stem": "Adding a substrate-mimicking inhibitor to an enzyme assay will most likely:", "options": ["Raise apparent Km, leave Vmax the same", "Lower Km and Vmax", "Raise Vmax only", "Leave both unchanged"], "correct": 0},
+       {"stem": "A drug competes with substrate at the active site. At very high substrate, the reaction rate:", "options": ["Cannot reach normal maximum", "Still reaches the normal maximum", "Falls to zero", "Doubles"], "correct": 1}
+     ]},
+    {"card_id": "bc2", "topic": "biochem", "source": "FP: Glycolysis",
+     "card_front": "Rate-limiting enzyme of glycolysis?", "card_back": "Phosphofructokinase-1 (PFK-1).",
+     "reworded": [
+       {"stem": "Which enzyme exerts the main flux control over glycolysis?", "options": ["Hexokinase", "PFK-1", "Pyruvate kinase", "Aldolase"], "correct": 1},
+       {"stem": "A cell with high ATP and citrate slows glycolysis mainly by inhibiting:", "options": ["PFK-1", "Enolase", "Phosphoglycerate kinase", "Triose phosphate isomerase"], "correct": 0}
+     ]},
+    {"card_id": "bc3", "topic": "biochem", "source": "FP: Protein Structure",
+     "card_front": "What stabilizes secondary structure (alpha helix / beta sheet)?", "card_back": "Backbone hydrogen bonds.",
+     "reworded": [
+       {"stem": "Alpha helices and beta sheets are held together primarily by:", "options": ["Disulfide bonds", "Hydrogen bonds along the backbone", "Hydrophobic side-chain packing", "Ionic bonds"], "correct": 1},
+       {"stem": "Which interaction is defined by side chains rather than the peptide backbone?", "options": ["Secondary structure", "Tertiary structure", "The alpha helix", "The beta turn"], "correct": 1}
+     ]},
+    {"card_id": "bi1", "topic": "biology", "source": "FP: Cellular Respiration",
+     "card_front": "Where does the electron transport chain occur in eukaryotes?", "card_back": "Inner mitochondrial membrane.",
+     "reworded": [
+       {"stem": "Oxidative phosphorylation's ETC is embedded in the:", "options": ["Outer mitochondrial membrane", "Inner mitochondrial membrane", "Matrix", "Cytosol"], "correct": 1},
+       {"stem": "The proton gradient driving ATP synthase is built across the:", "options": ["Inner mitochondrial membrane", "Nuclear envelope", "Plasma membrane", "ER membrane"], "correct": 0}
+     ]},
+    {"card_id": "bi2", "topic": "biology", "source": "FP: Cell Cycle",
+     "card_front": "In which phase is DNA replicated?", "card_back": "S phase.",
+     "reworded": [
+       {"stem": "A cell doubling its DNA content is in:", "options": ["G1", "S", "G2", "M"], "correct": 1},
+       {"stem": "The checkpoint before DNA synthesis begins is the:", "options": ["G1/S checkpoint", "Spindle checkpoint", "G2/M checkpoint", "Metaphase checkpoint"], "correct": 0}
+     ]},
+    {"card_id": "bi3", "topic": "biology", "source": "FP: Membrane Transport",
+     "card_front": "Does facilitated diffusion require ATP?", "card_back": "No; it moves solutes down their gradient via carriers/channels.",
+     "reworded": [
+       {"stem": "Glucose entering a cell via GLUT transporters down its gradient is:", "options": ["Primary active transport", "Facilitated diffusion", "Secondary active transport", "Endocytosis"], "correct": 1},
+       {"stem": "Which process does NOT directly consume ATP?", "options": ["Na+/K+ ATPase", "Facilitated diffusion", "Proton pump", "Ca2+ ATPase"], "correct": 1}
+     ]},
+    {"card_id": "og1", "topic": "orgo", "source": "FP: Stereochemistry",
+     "card_front": "What are enantiomers?", "card_back": "Non-superimposable mirror images.",
+     "reworded": [
+       {"stem": "Two molecules that are mirror images and cannot be superimposed are:", "options": ["Diastereomers", "Enantiomers", "Constitutional isomers", "Conformers"], "correct": 1},
+       {"stem": "Enantiomers differ in:", "options": ["Boiling point", "Direction of plane-polarized light rotation", "Molecular formula", "Connectivity"], "correct": 1}
+     ]},
+    {"card_id": "og2", "topic": "orgo", "source": "FP: Reaction Mechanisms",
+     "card_front": "SN1 rate depends on concentration of what?", "card_back": "Only the substrate (unimolecular rate-determining step).",
+     "reworded": [
+       {"stem": "Doubling nucleophile concentration in a pure SN1 reaction changes rate by:", "options": ["2x", "No change", "4x", "0.5x"], "correct": 1},
+       {"stem": "SN1 reactions are fastest with which substrate?", "options": ["Primary", "Tertiary", "Methyl", "Vinyl"], "correct": 1}
+     ]},
+    {"card_id": "og3", "topic": "orgo", "source": "FP: Spectroscopy",
+     "card_front": "IR absorption ~1700 cm^-1 indicates what group?", "card_back": "Carbonyl (C=O).",
+     "reworded": [
+       {"stem": "A strong IR band near 1700 cm^-1 most suggests a:", "options": ["O-H", "C=O", "C-H", "C#N"], "correct": 1},
+       {"stem": "Which functional group would you confirm with a ~1700 cm^-1 stretch?", "options": ["Alcohol", "Ketone", "Alkane", "Ether"], "correct": 1}
+     ]},
+    {"card_id": "gc1", "topic": "gen-chem", "source": "FP: Acids and Bases",
+     "card_front": "pH of a solution with [H+] = 1e-3 M?", "card_back": "pH = 3.",
+     "reworded": [
+       {"stem": "If hydrogen ion concentration is 0.001 M, the pH equals:", "options": ["3", "11", "1e-3", "7"], "correct": 0},
+       {"stem": "Raising [H+] tenfold changes pH by:", "options": ["+1", "-1", "+10", "no change"], "correct": 1}
+     ]},
+    {"card_id": "gc2", "topic": "gen-chem", "source": "FP: Thermodynamics",
+     "card_front": "When is a reaction spontaneous in terms of Gibbs free energy?", "card_back": "When delta G < 0.",
+     "reworded": [
+       {"stem": "A process proceeds spontaneously at constant T,P when:", "options": ["delta G > 0", "delta G < 0", "delta H = 0", "delta S = 0"], "correct": 1},
+       {"stem": "A reaction with negative delta H and positive delta S is spontaneous:", "options": ["At all temperatures", "Only at high T", "Only at low T", "Never"], "correct": 0}
+     ]},
+    {"card_id": "gc3", "topic": "gen-chem", "source": "FP: Equilibrium",
+     "card_front": "Le Chatelier: add product to an equilibrium, which way does it shift?", "card_back": "Toward reactants (left).",
+     "reworded": [
+       {"stem": "Increasing product concentration shifts equilibrium:", "options": ["Toward reactants", "Toward products", "No shift", "To completion"], "correct": 0},
+       {"stem": "Removing a product from a reaction at equilibrium will:", "options": ["Shift toward products", "Shift toward reactants", "Stop the reaction", "Change K"], "correct": 0}
+     ]},
+    {"card_id": "ph1", "topic": "physics", "source": "FP: Kinematics",
+     "card_front": "Units of acceleration?", "card_back": "m/s^2.",
+     "reworded": [
+       {"stem": "Acceleration is measured in:", "options": ["m/s", "m/s^2", "kg*m/s", "N"], "correct": 1},
+       {"stem": "The slope of a velocity-vs-time graph gives:", "options": ["Displacement", "Acceleration", "Jerk", "Force"], "correct": 1}
+     ]},
+    {"card_id": "ph2", "topic": "physics", "source": "FP: Circuits",
+     "card_front": "Ohm's law relates voltage, current, resistance how?", "card_back": "V = IR.",
+     "reworded": [
+       {"stem": "For a resistor, doubling voltage while resistance is fixed:", "options": ["Doubles current", "Halves current", "No change", "Doubles resistance"], "correct": 0},
+       {"stem": "Current through a resistor equals:", "options": ["V*R", "V/R", "R/V", "V+R"], "correct": 1}
+     ]},
+    {"card_id": "ph3", "topic": "physics", "source": "FP: Optics",
+     "card_front": "A converging lens forms what image of a distant object?", "card_back": "Real, inverted, reduced at the focal point.",
+     "reworded": [
+       {"stem": "Parallel rays through a convex lens converge at the:", "options": ["Center", "Focal point", "Radius of curvature", "Infinity"], "correct": 1},
+       {"stem": "An object far beyond the focal length of a converging lens gives an image that is:", "options": ["Virtual and upright", "Real and inverted", "Virtual and enlarged", "At infinity"], "correct": 1}
+     ]},
+    {"card_id": "ps1", "topic": "psych", "source": "FP: Conditioning",
+     "card_front": "In classical conditioning, what is the neutral stimulus after pairing?", "card_back": "It becomes the conditioned stimulus (CS).",
+     "reworded": [
+       {"stem": "A bell paired with food until it alone triggers salivation is now the:", "options": ["Unconditioned stimulus", "Conditioned stimulus", "Conditioned response", "Reinforcer"], "correct": 1},
+       {"stem": "Salivation to the bell alone is the:", "options": ["Unconditioned response", "Conditioned response", "Neutral stimulus", "Punisher"], "correct": 1}
+     ]},
+    {"card_id": "ps2", "topic": "psych", "source": "FP: Memory",
+     "card_front": "Which memory store has essentially unlimited capacity?", "card_back": "Long-term memory.",
+     "reworded": [
+       {"stem": "The memory system with the largest capacity and longest duration is:", "options": ["Sensory memory", "Short-term memory", "Long-term memory", "Working memory"], "correct": 2},
+       {"stem": "Rehearsal primarily transfers information from short-term memory into:", "options": ["Sensory memory", "Long-term memory", "Iconic memory", "Echoic memory"], "correct": 1}
+     ]},
+    {"card_id": "ps3", "topic": "psych", "source": "FP: Neurotransmitters",
+     "card_front": "Which neurotransmitter is most associated with reward pathways?", "card_back": "Dopamine.",
+     "reworded": [
+       {"stem": "The mesolimbic 'reward' pathway chiefly uses:", "options": ["Serotonin", "Dopamine", "GABA", "Acetylcholine"], "correct": 1},
+       {"stem": "Drugs of abuse commonly increase synaptic levels of:", "options": ["Dopamine", "Glutamate", "Glycine", "Histamine"], "correct": 0}
+     ]},
+    {"card_id": "so1", "topic": "sociology", "source": "FP: Social Theory",
+     "card_front": "What does 'social capital' refer to?", "card_back": "Resources gained through social networks/relationships.",
+     "reworded": [
+       {"stem": "The benefits a person gets from their network of relationships is called:", "options": ["Cultural capital", "Social capital", "Human capital", "Economic capital"], "correct": 1},
+       {"stem": "Knowing influential people who help you get a job is an example of:", "options": ["Social capital", "Meritocracy", "Anomie", "Stigma"], "correct": 0}
+     ]},
+    {"card_id": "so2", "topic": "sociology", "source": "FP: Demography",
+     "card_front": "What is the demographic transition's late stage marked by?", "card_back": "Low birth and low death rates.",
+     "reworded": [
+       {"stem": "An industrialized nation with low fertility and low mortality is in which demographic stage?", "options": ["Early expanding", "Late/low stationary", "Pre-transition", "High stationary"], "correct": 1},
+       {"stem": "Falling both birth and death rates characterizes:", "options": ["A pre-industrial society", "The demographic transition's later stages", "A population explosion", "Malthusian collapse"], "correct": 1}
+     ]},
+    {"card_id": "so3", "topic": "sociology", "source": "FP: Stratification",
+     "card_front": "Define 'meritocracy'.", "card_back": "A system where status is based on ability and effort.",
+     "reworded": [
+       {"stem": "A society allocating positions by talent and achievement is a:", "options": ["Caste system", "Meritocracy", "Aristocracy", "Plutocracy"], "correct": 1},
+       {"stem": "Which concept is opposed to ascribed status determining outcomes?", "options": ["Meritocracy", "Feudalism", "Endogamy", "Nepotism"], "correct": 0}
+     ]},
+    {"card_id": "py1", "topic": "physio", "source": "FP: Cardiovascular",
+     "card_front": "The heart's natural pacemaker is?", "card_back": "The sinoatrial (SA) node.",
+     "reworded": [
+       {"stem": "Rhythmic depolarization initiating each heartbeat starts at the:", "options": ["AV node", "SA node", "Bundle of His", "Purkinje fibers"], "correct": 1},
+       {"stem": "Damage to which structure most directly abolishes the intrinsic heart rate?", "options": ["SA node", "Left ventricle", "Aortic valve", "Coronary sinus"], "correct": 0}
+     ]},
+    {"card_id": "py2", "topic": "physio", "source": "FP: Renal",
+     "card_front": "Where does most filtrate reabsorption occur in the nephron?", "card_back": "Proximal convoluted tubule.",
+     "reworded": [
+       {"stem": "The nephron segment reabsorbing the bulk of water and solutes is the:", "options": ["Distal tubule", "Proximal convoluted tubule", "Collecting duct", "Loop of Henle"], "correct": 1},
+       {"stem": "Glucose is normally fully reabsorbed in the:", "options": ["Proximal convoluted tubule", "Descending limb", "Distal tubule", "Bladder"], "correct": 0}
+     ]},
+    {"card_id": "py3", "topic": "physio", "source": "FP: Endocrine",
+     "card_front": "Which hormone lowers blood glucose?", "card_back": "Insulin.",
+     "reworded": [
+       {"stem": "After a carbohydrate meal, the pancreas releases which glucose-lowering hormone?", "options": ["Glucagon", "Insulin", "Cortisol", "Epinephrine"], "correct": 1},
+       {"stem": "A hormone promoting cellular glucose uptake and glycogen storage is:", "options": ["Insulin", "Glucagon", "Growth hormone", "Thyroxine"], "correct": 0}
+     ]},
+    {"card_id": "ge1", "topic": "genetics", "source": "FP: Mendelian Genetics",
+     "card_front": "Cross of two heterozygotes (Aa x Aa): phenotypic ratio?", "card_back": "3:1 dominant:recessive.",
+     "reworded": [
+       {"stem": "Aa x Aa yields what fraction showing the recessive phenotype?", "options": ["1/4", "1/2", "3/4", "0"], "correct": 0},
+       {"stem": "A monohybrid cross of heterozygotes gives a phenotypic ratio of:", "options": ["1:1", "3:1", "9:3:3:1", "1:2:1 phenotypes"], "correct": 1}
+     ]},
+    {"card_id": "ge2", "topic": "genetics", "source": "FP: Molecular Genetics",
+     "card_front": "What enzyme synthesizes RNA from a DNA template?", "card_back": "RNA polymerase.",
+     "reworded": [
+       {"stem": "Transcription is catalyzed by:", "options": ["DNA polymerase", "RNA polymerase", "Ligase", "Helicase"], "correct": 1},
+       {"stem": "Which enzyme reads DNA to build a complementary mRNA strand?", "options": ["RNA polymerase", "Reverse transcriptase", "Primase", "Topoisomerase"], "correct": 0}
+     ]},
+    {"card_id": "ge3", "topic": "genetics", "source": "FP: Population Genetics",
+     "card_front": "Hardy-Weinberg: what does p + q = 1 represent?", "card_back": "Sum of allele frequencies for a two-allele locus.",
+     "reworded": [
+       {"stem": "In Hardy-Weinberg, p and q are the frequencies of:", "options": ["Two alleles at a locus", "Two genotypes", "Two phenotypes", "Two loci"], "correct": 0},
+       {"stem": "The frequency of heterozygotes at HWE equals:", "options": ["p^2", "2pq", "q^2", "p+q"], "correct": 1}
+     ]},
+    {"card_id": "cb1", "topic": "cell-bio", "source": "FP: Organelles",
+     "card_front": "Which organelle is the site of protein synthesis?", "card_back": "Ribosomes.",
+     "reworded": [
+       {"stem": "mRNA is translated into protein at the:", "options": ["Golgi", "Ribosome", "Lysosome", "Nucleolus"], "correct": 1},
+       {"stem": "Rough ER is 'rough' because it is studded with:", "options": ["Ribosomes", "Mitochondria", "Vesicles", "Peroxisomes"], "correct": 0}
+     ]},
+    {"card_id": "cb2", "topic": "cell-bio", "source": "FP: Cytoskeleton",
+     "card_front": "Which cytoskeletal element is largest in diameter?", "card_back": "Microtubules.",
+     "reworded": [
+       {"stem": "The thickest cytoskeletal filaments, made of tubulin, are:", "options": ["Microfilaments", "Microtubules", "Intermediate filaments", "Actin"], "correct": 1},
+       {"stem": "Chromosome movement in mitosis relies on:", "options": ["Microtubules", "Actin filaments", "Keratin", "Collagen"], "correct": 0}
+     ]},
+    {"card_id": "cb3", "topic": "cell-bio", "source": "FP: Signaling",
+     "card_front": "What class of receptor activates G proteins?", "card_back": "G-protein-coupled receptors (GPCRs), 7-transmembrane.",
+     "reworded": [
+       {"stem": "A seven-transmembrane receptor that signals through GDP/GTP exchange is a:", "options": ["Ligand-gated channel", "GPCR", "Receptor tyrosine kinase", "Nuclear receptor"], "correct": 1},
+       {"stem": "cAMP as a second messenger is most classically downstream of:", "options": ["GPCR activation", "Steroid receptors", "Voltage-gated channels", "Gap junctions"], "correct": 0}
+     ]}
+  ]
+}
