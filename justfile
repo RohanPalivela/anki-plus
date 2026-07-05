@@ -46,6 +46,25 @@ android-run *args:
 speedrun-codegen-check:
     ./tools/speedrun-codegen-check
 
+# Speedrun: p50/p95/worst benchmark on a 50k-card deck (§7h/§10). Extra flags after `--`.
+bench *args:
+    {{ ninja }} pylib
+    {{ uv }} run python tools/bench/bench.py {{ args }}
+
+# Speedrun: held-out validation — memory calibration (Brier/log loss) + performance AUC + leakage. Flags after `--`.
+speedrun-validate *args:
+    {{ ninja }} pylib
+    {{ uv }} run python tools/speedrun/validation.py {{ args }}
+
+# Speedrun: study-feature ablation (interleaving on/off vs plain Anki); pure-Python, runs without a build. Flags after `--`.
+speedrun-ablation *args:
+    python3 tools/speedrun/ablation.py {{ args }}
+
+# Speedrun: paraphrase test — card recall vs reworded-question accuracy gap (§7d). Flags after `--`.
+speedrun-paraphrase *args:
+    {{ ninja }} pylib
+    {{ uv }} run python tools/speedrun/paraphrase_test.py {{ args }}
+
 # Build and run all checks (lint + test) - lets ninja handle dependencies
 check:
     {{ ninja }} pylib qt check
