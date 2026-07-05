@@ -33,6 +33,10 @@ from _bootstrap import ensure_anki_importable  # type: ignore[import-not-found]
 
 ensure_anki_importable()
 
+# Load ``collection`` (side effect) before importing from ``cards`` to avoid the
+# cards→collection→hooks_gen→cards circular import when this module is the first
+# to pull in ``anki``; the alphabetical from-imports below are then trivial.
+import anki.collection  # noqa: E402,F401
 from anki.cards import CardId  # noqa: E402
 from anki.collection import Collection  # noqa: E402
 from anki.decks import DeckId  # noqa: E402
@@ -125,6 +129,10 @@ def _seed_reviews(col: Collection, card_ids: list[CardId], rng: random.Random) -
     answered = 0
     for cid in sample:
         card = col.get_card(cid)
+        # answerCard needs a started timer to compute time-taken; without it the
+        # backend rejects the grade and nothing gets seeded (mirrors the study
+        # dialog, which calls start_timer() before answering).
+        card.start_timer()
         # Bias toward "Good" so mastery is non-degenerate but not all-perfect.
         ease: Literal[1, 3] = 3 if rng.random() < 0.75 else 1
         try:

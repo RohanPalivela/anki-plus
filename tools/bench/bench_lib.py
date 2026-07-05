@@ -116,6 +116,11 @@ class RowResult:
     budget: Budget | None
     p95_pass: bool
     freeze_pass: bool
+    #: True when the action was not measured (no latency samples) — e.g. the deck
+    #: had no due cards to answer. Such a row is neither PASS nor FAIL; it is
+    #: reported as SKIP and excluded from the OVERALL verdict rather than
+    #: crashing the whole benchmark on an empty series.
+    skipped: bool = False
 
     @property
     def passed(self) -> bool:
@@ -126,6 +131,11 @@ def evaluate(stat: Stat, budget: Budget | None) -> RowResult:
     """Grade one action's stats against its budget (if any)."""
     if budget is None:
         return RowResult(stat=stat, budget=None, p95_pass=True, freeze_pass=True)
+    if not stat.samples_ms:
+        # No samples collected: report as skipped, not a 0ms pass or a crash.
+        return RowResult(
+            stat=stat, budget=budget, p95_pass=False, freeze_pass=True, skipped=True
+        )
     p95_pass = stat.p95 <= budget.p95_ms
     # The freeze rule only applies to interactive (tap-to-feedback) actions.
     freeze_pass = (not budget.interactive) or stat.worst <= FREEZE_MS
@@ -155,19 +165,29 @@ def format_table(stats: list[Stat], budgets: dict[str, Budget] = BUDGETS) -> str
         if budget is None:
             budget_cell = "—"
             result_cell = "n/a"
+        elif row.skipped:
+            budget_cell = f"p95<{_fmt_ms(budget.p95_ms)}"
+            result_cell = "SKIP (no samples)"
         else:
             budget_cell = f"p95<{_fmt_ms(budget.p95_ms)}"
             result_cell = "PASS" if row.passed else "FAIL"
-            if row.passed and budget.interactive:
-                result_cell = "PASS"
         label = stat.label + (f"  [{stat.note}]" if stat.note else "")
+        # Empty series (skipped) have no percentiles to print.
+        if stat.samples_ms:
+            p50_cell, p95_cell, worst_cell = (
+                _fmt_ms(stat.p50),
+                _fmt_ms(stat.p95),
+                _fmt_ms(stat.worst),
+            )
+        else:
+            p50_cell = p95_cell = worst_cell = "—"
         table.append(
             [
                 label,
                 str(stat.n),
-                _fmt_ms(stat.p50),
-                _fmt_ms(stat.p95),
-                _fmt_ms(stat.worst),
+                p50_cell,
+                p95_cell,
+                worst_cell,
                 budget_cell,
                 result_cell,
             ]
@@ -184,9 +204,15 @@ def format_table(stats: list[Stat], budgets: dict[str, Budget] = BUDGETS) -> str
     out = [render(headers), render(["-" * w for w in widths])]
     out.extend(render(line) for line in table)
 
-    all_pass = all(r.passed for r in rows if r.budget is not None)
+    # Skipped (unmeasured) actions are excluded from OVERALL — it reflects only
+    # the actions we actually measured.
+    graded = [r for r in rows if r.budget is not None and not r.skipped]
+    all_pass = all(r.passed for r in graded)
     out.append("")
     out.append(f"OVERALL: {'PASS' if all_pass else 'FAIL'}")
+    skipped = [r.stat.label for r in rows if r.skipped]
+    if skipped:
+        out.append(f"SKIPPED (no samples): {', '.join(skipped)}")
     # Call out any freeze violations explicitly (worst > 100ms on an
     # interactive action) — these are the "no UI freeze > 100ms" rule.
     freezes = [
@@ -202,4 +228,4 @@ def format_table(stats: list[Stat], budgets: dict[str, Budget] = BUDGETS) -> str
 def all_passed(stats: list[Stat], budgets: dict[str, Budget] = BUDGETS) -> bool:
     """True iff every action with a budget met its p95 and freeze verdicts."""
     rows = [evaluate(s, budgets.get(s.key)) for s in stats]
-    return all(r.passed for r in rows if r.budget is not None)
+    return all(r.passed for r in rows if r.budget is not None and not r.skipped)

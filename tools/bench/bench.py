@@ -38,8 +38,15 @@ from _bootstrap import ensure_anki_importable  # type: ignore[import-not-found]
 
 ensure_anki_importable()
 
+# Load ``anki.collection`` (side effect) before importing from ``anki.cards``:
+# importing ``cards`` first triggers cards→collection→latex→hooks→hooks_gen→
+# (back to) ``anki.cards`` while ``Card`` is still being defined — a circular
+# import. Pulling in ``collection`` here initialises both in the safe order, so
+# the alphabetical from-imports below are then trivial.
+import anki.collection  # noqa: E402,F401
 from anki.cards import Card  # noqa: E402
 from anki.collection import Collection  # noqa: E402
+from anki.decks import DeckId  # noqa: E402
 
 
 def _time_ms(fn: Callable[[], object]) -> float:
@@ -59,9 +66,13 @@ def _bench_button_and_next(col: Collection, iterations: int) -> list[bench_lib.S
         card = card_box[0]
         if card is None:
             break
-        # ...then acknowledging a grade on it (Good).
+        # ...then acknowledging a grade on it (Good). The card came from the
+        # queue (getCard), so answer with from_queue=True: answering with
+        # from_queue=False mutates the card without updating the in-memory queue,
+        # which makes the *next* getCard fail with "card modified without
+        # updating queue".
         button_samples.append(
-            _time_ms(lambda: col.sched.answerCard(card, 3, from_queue=False))
+            _time_ms(lambda: col.sched.answerCard(card, 3, from_queue=True))
         )
     return [
         bench_lib.summarize(
@@ -93,6 +104,33 @@ def _bench_dashboard(col: Collection, iterations: int) -> list[bench_lib.Stat]:
     ]
 
 
+def _prepare_queue(col: Collection) -> None:
+    """Select the deck with the most reviewable cards and lift its daily limits.
+
+    ``col.sched.getCard()`` serves the *selected* deck's subtree and honours the
+    deck's per-day new/review limits. A freshly opened collection selects the
+    (empty) Default deck, so getCard would return None immediately; and the
+    default 20-new/200-review caps would throttle the benchmark to a handful of
+    samples. Point the scheduler at the busy deck and raise its caps so the
+    interactive actions get a full sample series to percentile over.
+    """
+    rows = col.db.all(
+        "select did, count(*) from cards where queue >= 0 group by did order by 2 desc"
+    )
+    if not rows:
+        return
+    did = DeckId(rows[0][0])
+    deck = col.decks.get(did)
+    conf_id = deck.get("conf") if deck else None
+    if conf_id is not None:
+        conf = col.decks.get_config(conf_id)
+        if conf is not None:
+            conf["new"]["perDay"] = 1_000_000
+            conf["rev"]["perDay"] = 1_000_000
+            col.decks.update_config(conf)
+    col.decks.select(did)
+
+
 def run(deck: str, iterations: int, dashboard_iterations: int) -> bool:
     col = Collection(deck)
     try:
@@ -103,6 +141,7 @@ def run(deck: str, iterations: int, dashboard_iterations: int) -> bool:
                 "WARNING: fewer than 40k cards — §10 budgets are defined on a 50k "
                 "deck. Generate one with tools/bench/gen_deck.py for a valid run.\n"
             )
+        _prepare_queue(col)
         stats = _bench_button_and_next(col, iterations)
         stats += _bench_dashboard(col, dashboard_iterations)
         print(bench_lib.format_table(stats))

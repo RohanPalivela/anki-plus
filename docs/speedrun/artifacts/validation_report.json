@@ -1,0 +1,104 @@
+{
+  "mode": "collection: /tmp/speedrun_real/collection.anki2",
+  "memory": {
+    "n_train": 46,
+    "n_test": 20,
+    "split": "random",
+    "raw": {
+      "n": 20,
+      "brier": 0.10937850546544518,
+      "log_loss": 0.3273966002739951,
+      "ece": 0.19337974126202645,
+      "reliability": [
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 8,
+          "mean_predicted": 0.5194182847161792,
+          "empirical": 0.125,
+          "gap": -0.39441828471617923
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 4,
+          "mean_predicted": 0.8951420310803954,
+          "empirical": 1.0,
+          "gap": 0.10485796891960464
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "count": 8,
+          "mean_predicted": 0.9633979160209154,
+          "empirical": 1.0,
+          "gap": 0.0366020839790846
+        }
+      ]
+    },
+    "platt": {
+      "n": 20,
+      "brier": 0.055643220241804056,
+      "log_loss": 0.24131066581431523,
+      "ece": 0.08684266898702651,
+      "reliability": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "count": 8,
+          "mean_predicted": 0.030710985401437872,
+          "empirical": 0.125,
+          "gap": 0.09428901459856212
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 4,
+          "mean_predicted": 0.8045432721704998,
+          "empirical": 1.0,
+          "gap": 0.1954567278295002
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "count": 8,
+          "mean_predicted": 0.9749107060457459,
+          "empirical": 1.0,
+          "gap": 0.025089293954254077
+        }
+      ]
+    },
+    "isotonic": {
+      "n": 20,
+      "brier": 0.05000000006934867,
+      "log_loss": 1.7269412760161416,
+      "ece": 0.05000245623593151,
+      "reliability": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "count": 8,
+          "mean_predicted": 0.0,
+          "empirical": 0.125,
+          "gap": 0.125
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "count": 12,
+          "mean_predicted": 0.9999959062734475,
+          "empirical": 1.0,
+          "gap": 4.093726552523158e-06
+        }
+      ]
+    },
+    "best_recalibrator": "isotonic"
+  },
+  "performance": null,
+  "leakage": {
+    "ran": true,
+    "exit_code": 0,
+    "report": "/Users/rohanpalivela/Documents/Github/AlphaAI/anki-plus/docs/speedrun/artifacts/leakage_report.txt",
+    "clean_hint": true
+  }
+}

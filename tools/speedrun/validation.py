@@ -49,6 +49,17 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 import importlib.util
 import sys
 
+# The real-collection modes import the *built* ``anki`` package — the source
+# ``pylib/anki`` overlaid with generated protobuf (``*_pb2``) + the compiled Rust
+# bridge that the build writes into ``out/pylib``. Mirror ``tools/run.py`` and put
+# both on ``sys.path`` (out/pylib first) so ``anki.collection`` and its generated
+# modules resolve under ``uv run``. Harmless for ``--demo``, which loads the
+# metrics module by file path and never imports ``anki``.
+for _rel in ("pylib", "out/pylib"):
+    _built = str(REPO_ROOT / _rel)
+    if _built not in sys.path:
+        sys.path.insert(0, _built)
+
 # Load the pure-stdlib metrics module *by file path* so ``--demo`` runs on a
 # fresh checkout without importing the heavy ``anki`` package (which pulls in the
 # compiled backend). The real-collection modes import ``anki.collection`` lazily

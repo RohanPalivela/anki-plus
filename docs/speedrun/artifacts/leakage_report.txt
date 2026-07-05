@@ -1,0 +1,85 @@
+================================================================
+  Speedrun AI Rephrasal Eval
+================================================================
+Provider:            mock
+Gold served items:   50
+Variants generated:  50
+
+Classification (automatic grader):
+  correct-and-useful:         50  (100.0%)
+  correct-but-bad-teaching:    0
+  wrong:                       0  (0.0%)
+
+Accuracy:       100.0%   [cutoff >= 80.0%]  OK
+Wrong rate:     0.0%   [cutoff <= 10.0%]  OK
+
+min_quality gate (0.60): 50 would be written, 0 blocked
+
+Baseline (same-concept, head-to-head over 34 items):
+  AI rephrasal same-concept:   100.0%
+  TF-IDF retrieval baseline:   82.4%
+  AI beats baseline:           YES (+17.6%)
+
+Leakage check:
+  heldout items in inputs:     0 (clean)
+  near-duplicates of heldout:  0 (clean)
+  refuses to run on heldout:   YES
+
+----------------------------------------------------------------
+RESULT: PASS
+----------------------------------------------------------------
+
+Generating 50 variants (1 provider call each)…
+  [1/50] graded: correct-and-useful (score 1.00)
+  [2/50] graded: correct-and-useful (score 1.00)
+  [3/50] graded: correct-and-useful (score 1.00)
+  [4/50] graded: correct-and-useful (score 1.00)
+  [5/50] graded: correct-and-useful (score 1.00)
+  [6/50] graded: correct-and-useful (score 1.00)
+  [7/50] graded: correct-and-useful (score 1.00)
+  [8/50] graded: correct-and-useful (score 1.00)
+  [9/50] graded: correct-and-useful (score 1.00)
+  [10/50] graded: correct-and-useful (score 1.00)
+  [11/50] graded: correct-and-useful (score 1.00)
+  [12/50] graded: correct-and-useful (score 1.00)
+  [13/50] graded: correct-and-useful (score 1.00)
+  [14/50] graded: correct-and-useful (score 1.00)
+  [15/50] graded: correct-and-useful (score 1.00)
+  [16/50] graded: correct-and-useful (score 1.00)
+  [17/50] graded: correct-and-useful (score 1.00)
+  [18/50] graded: correct-and-useful (score 1.00)
+  [19/50] graded: correct-and-useful (score 1.00)
+  [20/50] graded: correct-and-useful (score 1.00)
+  [21/50] graded: correct-and-useful (score 1.00)
+  [22/50] graded: correct-and-useful (score 1.00)
+  [23/50] graded: correct-and-useful (score 1.00)
+  [24/50] graded: correct-and-useful (score 1.00)
+  [25/50] graded: correct-and-useful (score 1.00)
+  [26/50] graded: correct-and-useful (score 1.00)
+  [27/50] graded: correct-and-useful (score 1.00)
+  [28/50] graded: correct-and-useful (score 1.00)
+  [29/50] graded: correct-and-useful (score 1.00)
+  [30/50] graded: correct-and-useful (score 1.00)
+  [31/50] graded: correct-and-useful (score 1.00)
+  [32/50] graded: correct-and-useful (score 1.00)
+  [33/50] graded: correct-and-useful (score 1.00)
+  [34/50] graded: correct-and-useful (score 1.00)
+  [35/50] graded: correct-and-useful (score 1.00)
+  [36/50] graded: correct-and-useful (score 1.00)
+  [37/50] graded: correct-and-useful (score 1.00)
+  [38/50] graded: correct-and-useful (score 1.00)
+  [39/50] graded: correct-and-useful (score 1.00)
+  [40/50] graded: correct-and-useful (score 1.00)
+  [41/50] graded: correct-and-useful (score 1.00)
+  [42/50] graded: correct-and-useful (score 1.00)
+  [43/50] graded: correct-and-useful (score 1.00)
+  [44/50] graded: correct-and-useful (score 1.00)
+  [45/50] graded: correct-and-useful (score 1.00)
+  [46/50] graded: correct-and-useful (score 1.00)
+  [47/50] graded: correct-and-useful (score 1.00)
+  [48/50] graded: correct-and-useful (score 1.00)
+  [49/50] graded: correct-and-useful (score 1.00)
+  [50/50] graded: correct-and-useful (score 1.00)
+Computing TF-IDF baseline + AI same-concept rates…
+Running leakage + heldout-refusal checks…
+Eval complete; building report.
