@@ -20,16 +20,16 @@ edits below are the ones to watch on a future rebase against upstream Anki.
 
 ## Edited upstream files (watch on rebase)
 
-| File | Edit | Merge difficulty |
-| :-- | :-- | :-- |
-| `rslib/src/scheduler/queue/builder/mod.rs` | Load Speedrun value order + sort the built queue when enabled | **Medium** — upstream changes queue building periodically; the hook is isolated to `new()`/`build()`. |
-| `rslib/src/scheduler/queue/builder/gathering.rs` | Respect activation/suspension in gather | **Low–Medium** |
-| `rslib/src/scheduler/bury_and_suspend.rs` | Activation uses suspend/unsuspend paths | **Low** |
-| `rslib/src/config/bool.rs` | Add `SpeedrunOrdering` bool key | **Low** — enum addition. |
-| `rslib/src/ops.rs` | Add Speedrun ops (e.g. `ActivateForMiss`) for undo | **Low** — enum addition. |
-| `rslib/src/lib.rs` | Register the `speedrun` module + service | **Low**. |
-| `proto/anki/scheduler.proto` | Minor wiring for the ordering flag | **Low**. |
-| `rslib/src/sync/collection/tests.rs` | Added `speedrun_state_syncs_across_devices_offline` test | **Low** — test-only addition. |
+| File                                             | Edit                                                          | Merge difficulty                                                                                      |
+| :----------------------------------------------- | :------------------------------------------------------------ | :---------------------------------------------------------------------------------------------------- |
+| `rslib/src/scheduler/queue/builder/mod.rs`       | Load Speedrun value order + sort the built queue when enabled | **Medium** — upstream changes queue building periodically; the hook is isolated to `new()`/`build()`. |
+| `rslib/src/scheduler/queue/builder/gathering.rs` | Respect activation/suspension in gather                       | **Low–Medium**                                                                                        |
+| `rslib/src/scheduler/bury_and_suspend.rs`        | Activation uses suspend/unsuspend paths                       | **Low**                                                                                               |
+| `rslib/src/config/bool.rs`                       | Add `SpeedrunOrdering` bool key                               | **Low** — enum addition.                                                                              |
+| `rslib/src/ops.rs`                               | Add Speedrun ops (e.g. `ActivateForMiss`) for undo            | **Low** — enum addition.                                                                              |
+| `rslib/src/lib.rs`                               | Register the `speedrun` module + service                      | **Low**.                                                                                              |
+| `proto/anki/scheduler.proto`                     | Minor wiring for the ordering flag                            | **Low**.                                                                                              |
+| `rslib/src/sync/collection/tests.rs`             | Added `speedrun_state_syncs_across_devices_offline` test      | **Low** — test-only addition.                                                                         |
 
 ## How to regenerate this list
 

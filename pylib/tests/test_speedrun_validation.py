@@ -55,7 +55,8 @@ def test_platt_improves_overconfident_predictions():
     import random
 
     rng = random.Random(0)
-    train, test = [], []
+    train: list[tuple[float, int]] = []
+    test: list[tuple[float, int]] = []
     for _ in range(2000):
         true_p = rng.random()
         pred = true_p**0.5  # over-confident transform
@@ -81,7 +82,9 @@ def test_split_pairs_is_deterministic_and_disjoint():
     a2, b2 = sv.split_pairs(pairs, test_frac=0.3, seed=42, mode="random")
     assert a1 == a2 and b1 == b2
     assert len(b1) == 30 and len(a1) == 70
-    assert not (set(a1) & set(b1)) or True  # values may repeat; index-disjoint by construction
+    assert (
+        not (set(a1) & set(b1)) or True
+    )  # values may repeat; index-disjoint by construction
 
 
 def test_fsrs_retrievability_matches_90pct_at_stability():

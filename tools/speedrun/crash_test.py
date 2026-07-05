@@ -9,7 +9,7 @@ collections** afterward — the §10 hard reliability limit.
 Method: for each trial, copy a seeded collection to a temp path, spawn a child
 process that opens it and answers cards in a tight loop (writing to the DB), then
 **SIGKILL the child at a random moment mid-write**. Reopen the collection in the
-parent and run Anki's integrity check (`check_database`). Any reopen failure or
+parent and run Anki's integrity check (`fix_integrity`). Any reopen failure or
 integrity problem counts as corruption.
 
 Run (needs the built backend)::
@@ -30,9 +30,8 @@ import shutil
 import signal
 import tempfile
 import time
-from pathlib import Path
 
-from _bootstrap import ensure_anki_importable
+from _bootstrap import ensure_anki_importable  # type: ignore[import-not-found]
 
 ensure_anki_importable()
 
@@ -79,11 +78,9 @@ def _integrity_ok(col_path: str) -> bool:
     except Exception:
         return False
     try:
-        # check_database returns (problems: list[str], ok: bool) across versions;
-        # be defensive about the exact shape.
-        result = col.check_database()
-        problems = result[0] if isinstance(result, (list, tuple)) else result
-        return not problems
+        # fix_integrity() runs Anki's DB check and returns (report, ok).
+        _report, ok = col.fix_integrity()
+        return ok
     except Exception:
         return False
     finally:

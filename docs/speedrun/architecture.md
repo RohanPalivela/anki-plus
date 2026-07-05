@@ -7,26 +7,26 @@ Readiness). One engine powers **desktop + Android**.
 ## Layers
 
 ```
-            ┌───────────────────────────────────────────────┐
-            │                Rust core (rslib)               │
-            │  scheduler / FSRS  +  src/speedrun/*           │
-            │  - activation (question-gated unsuspend)       │
-            │  - coverage sweep                              │
-            │  - value-ordered queue (topic_weight×weakness) │
-            │  - Memory / Performance / Readiness models     │
-            └───────────────▲───────────────▲───────────────┘
-                            │ protobuf (SpeedrunService)     │
-              ┌─────────────┴───────┐        ┌───────────────┴─────────────┐
-              │  pylib (_backend)   │        │  rsdroid JNI (GeneratedBackend)│
-              │  col.speedrun.*     │        │  backend.*Speedrun RPCs        │
-              └──────────▲──────────┘        └──────────────▲────────────────┘
-                         │                                  │
-              ┌──────────┴──────────┐          ┌────────────┴───────────────┐
-              │  Qt desktop (aqt)   │          │  AnkiDroid (Kotlin)         │
-              │  qt/aqt/speedrun/*  │          │  com.ichi2.anki.speedrun.*  │
-              │  + Svelte web pages │◄────────►│  + shared Svelte in WebView │
-              └─────────────────────┘  shared  └─────────────────────────────┘
-                         ts/routes/speedrun-home, speedrun-dashboard
+┌───────────────────────────────────────────────┐
+│                Rust core (rslib)               │
+│  scheduler / FSRS  +  src/speedrun/*           │
+│  - activation (question-gated unsuspend)       │
+│  - coverage sweep                              │
+│  - value-ordered queue (topic_weight×weakness) │
+│  - Memory / Performance / Readiness models     │
+└───────────────▲───────────────▲───────────────┘
+                │ protobuf (SpeedrunService)     │
+  ┌─────────────┴───────┐        ┌───────────────┴─────────────┐
+  │  pylib (_backend)   │        │  rsdroid JNI (GeneratedBackend)│
+  │  col.speedrun.*     │        │  backend.*Speedrun RPCs        │
+  └──────────▲──────────┘        └──────────────▲────────────────┘
+             │                                  │
+  ┌──────────┴──────────┐          ┌────────────┴───────────────┐
+  │  Qt desktop (aqt)   │          │  AnkiDroid (Kotlin)         │
+  │  qt/aqt/speedrun/*  │          │  com.ichi2.anki.speedrun.*  │
+  │  + Svelte web pages │◄────────►│  + shared Svelte in WebView │
+  └─────────────────────┘  shared  └─────────────────────────────┘
+             ts/routes/speedrun-home, speedrun-dashboard
 ```
 
 ## Data model — everything is a native Anki object (so sync/undo are free)

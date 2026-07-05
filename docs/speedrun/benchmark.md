@@ -24,12 +24,12 @@ python tools/bench/gen_deck.py --out /tmp/speedrun_bench.anki2 --count 50000
 
 ## What is measured
 
-| Action | How | §10 budget |
-| :-- | :-- | :-- |
-| Button press ack | `sched.answerCard(card, Good)` | p95 < 50 ms |
-| Next card appears | `sched.getCard()` | p95 < 100 ms |
-| Dashboard first load (cold) | `get_{memory,performance,readiness}_score()` | p95 < 1 s |
-| Dashboard refresh (warm) | same, warmed | p95 < 500 ms |
+| Action                      | How                                          | §10 budget   |
+| :-------------------------- | :------------------------------------------- | :----------- |
+| Button press ack            | `sched.answerCard(card, Good)`               | p95 < 50 ms  |
+| Next card appears           | `sched.getCard()`                            | p95 < 100 ms |
+| Dashboard first load (cold) | `get_{memory,performance,readiness}_score()` | p95 < 1 s    |
+| Dashboard refresh (warm)    | same, warmed                                 | p95 < 500 ms |
 
 Interactive actions (button ack, next card) are additionally checked against the
 cross-cutting **"no UI freeze > 100 ms"** rule on their worst sample.

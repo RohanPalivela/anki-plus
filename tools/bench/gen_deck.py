@@ -27,11 +27,13 @@ from __future__ import annotations
 import argparse
 import random
 import time
+from typing import Literal
 
-from _bootstrap import ensure_anki_importable
+from _bootstrap import ensure_anki_importable  # type: ignore[import-not-found]
 
 ensure_anki_importable()
 
+from anki.cards import CardId  # noqa: E402
 from anki.collection import Collection  # noqa: E402
 from anki.decks import DeckId  # noqa: E402
 
@@ -75,8 +77,8 @@ def generate(
         deck_id = DeckId(col.decks.id("Speedrun::Bench"))
 
         started = time.time()
-        suspend_ids: list[int] = []
-        review_targets: list[int] = []
+        suspend_ids: list[CardId] = []
+        review_targets: list[CardId] = []
 
         for base in range(0, count, BATCH):
             n = min(BATCH, count - base)
@@ -115,7 +117,7 @@ def generate(
         col.close()
 
 
-def _seed_reviews(col: Collection, card_ids: list[int], rng: random.Random) -> None:
+def _seed_reviews(col: Collection, card_ids: list[CardId], rng: random.Random) -> None:
     """Answer a sample of activated cards so they carry FSRS state + revlog rows."""
     # Reviewing 50k cards would dominate generation time; a representative
     # sample is enough to exercise the memory/performance aggregations.
@@ -124,7 +126,7 @@ def _seed_reviews(col: Collection, card_ids: list[int], rng: random.Random) -> N
     for cid in sample:
         card = col.get_card(cid)
         # Bias toward "Good" so mastery is non-degenerate but not all-perfect.
-        ease = 3 if rng.random() < 0.75 else 1
+        ease: Literal[1, 3] = 3 if rng.random() < 0.75 else 1
         try:
             col.sched.answerCard(card, ease, from_queue=False)
             answered += 1

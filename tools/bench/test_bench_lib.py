@@ -21,7 +21,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from bench_lib import (  # noqa: E402
+from bench_lib import (  # type: ignore[import-not-found]  # noqa: E402
     BUDGETS,
     Budget,
     Stat,

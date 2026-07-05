@@ -17,15 +17,15 @@ hand-in).
 
 ## 1. Ground truth — what is already DONE
 
-| Area | State |
-| :--- | :--- |
+| Area                                                                                                                    | State                                                                                                                                                                |
+| :---------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Rust engine change (question-gated activation + coverage sweep + value-ordered queue `value = topic_weight × weakness`) | **Done.** 10 Rust unit tests + 1 Python-calling-RPC test. `rslib/src/speedrun/`, `proto/anki/speedrun.proto`, `rslib/src/scheduler/queue/builder/speedrun_value.rs`. |
-| Memory / Performance / Readiness models (Rust RPCs, abstention rules) | **Done** as code. `mastery.rs`, `performance.rs`, `readiness.rs`, `synthetic.rs`. |
-| AI rephrase + eval harness + retrieval baseline + leakage logic | **Done.** `pylib/anki/speedrun_rephrase.py`, `tools/speedrun/rephrase_eval.py`. |
-| Question-first study loop + dashboard (desktop + Android) | **Done.** `qt/aqt/speedrun/`, `ts/routes/speedrun-*`, Android `com.ichi2.anki.speedrun.*`. |
-| Shared engine on Android (backend AAR built, Speedrun RPCs codegen'd, `local_backend=true`) | **Done.** `Anki-Android-Backend` (fork clone in `anki/`), `tools/android-setup`/`android-run`. |
-| Two-way sync + conflict rule | **Done** in engine: Rust test `speedrun_state_syncs_across_devices_offline` + `docs/speedrun/sync.md`. |
-| README (MCAT stated, build instructions) | **Done.** |
+| Memory / Performance / Readiness models (Rust RPCs, abstention rules)                                                   | **Done** as code. `mastery.rs`, `performance.rs`, `readiness.rs`, `synthetic.rs`.                                                                                    |
+| AI rephrase + eval harness + retrieval baseline + leakage logic                                                         | **Done.** `pylib/anki/speedrun_rephrase.py`, `tools/speedrun/rephrase_eval.py`.                                                                                      |
+| Question-first study loop + dashboard (desktop + Android)                                                               | **Done.** `qt/aqt/speedrun/`, `ts/routes/speedrun-*`, Android `com.ichi2.anki.speedrun.*`.                                                                           |
+| Shared engine on Android (backend AAR built, Speedrun RPCs codegen'd, `local_backend=true`)                             | **Done.** `Anki-Android-Backend` (fork clone in `anki/`), `tools/android-setup`/`android-run`.                                                                       |
+| Two-way sync + conflict rule                                                                                            | **Done** in engine: Rust test `speedrun_state_syncs_across_devices_offline` + `docs/speedrun/sync.md`.                                                               |
+| README (MCAT stated, build instructions)                                                                                | **Done.**                                                                                                                                                            |
 
 ## 2. Grade hard caps that dominate sequencing (from §11)
 
@@ -53,6 +53,7 @@ happens on `speedrun-sunday` (needs the existing `out/` build artifacts).
 ### P0 — remove hard caps (highest priority)
 
 **WS1 — Held-out validation harness** _(removes 60% cap; feeds Score accuracy 20% + Fair tests 12%)_
+
 - New re-runnable harness (e.g. `pylib/anki/speedrun/validation.py` + `just` recipe).
 - **Memory:** train/test split of review history → reliability diagram + **Brier or log loss** on held-out reviews; apply Platt/isotonic if miscalibrated.
 - **Performance:** accuracy/AUC on `pool::heldout` questions.
@@ -60,17 +61,20 @@ happens on `speedrun-sunday` (needs the existing `out/` build artifacts).
 - **Acceptance:** one command regenerates metrics + plots; numbers written to a results file.
 
 **WS2 — One-command benchmark + 50k deck** _(removes 60% cap; §7h, §10)_
+
 - `just bench` (or `make bench`) loads a **50k-card** deck and prints **p50 / p95 / worst** for: button ack, next card, dashboard load, dashboard refresh.
 - Add a 50k-deck generator.
 - **Acceptance:** single command prints the table; numbers compared to §10 budgets.
 
 **WS3 — Packaging + clean-device verification** _(removes 50% cap; §12)_
+
 - Desktop installer build path documented + built (`tools/build-installer`).
 - **Signed** Android release APK (`assembleRelease` + keystore) — wire signing + doc.
 - Runbook to verify both install & launch on a clean machine/emulator.
 - **Acceptance:** installer + signed APK produced; clean-device runbook complete.
 
 **WS4 — Sync proof (7b)** _(protects 70% cap; §7b)_
+
 - Runbook + scripts for: 10 offline reviews on phone + 10 different on desktop → reconcile → 20 kept, none doubled; then same-card offline on both → document rule.
 - Align the "winner" wording: reviews **keep both revlog rows**; mutable objects last-writer-wins by mod time (per `sync.md`).
 - Capture `cargo test -p anki --lib speedrun_state_syncs_across_devices_offline` output.
@@ -79,18 +83,21 @@ happens on `speedrun-sunday` (needs the existing `out/` build artifacts).
 ### P1 — heaviest single-weight gaps
 
 **WS5 — Study-feature ablation** _(15% of grade; §8, §4b)_
+
 - Pre-register the metric in one sentence (interleaving: "mixing related topics raises accuracy on new mixed-topic questions at equal study time; fail if Δ ≤ 0").
 - Add an **interleaving-off** flag/build.
 - 3 builds at equal study time: full app / feature-off / plain unmodified Anki. Report a range and **honest nulls**.
 - **Acceptance:** re-runnable experiment harness + results writeup (nulls OK).
 
 **WS6 — Paraphrase test** _(§7d; proves Performance ≠ Memory)_
+
 - 30 cards → 2 reworded exam-style Qs each; compare card recall vs reworded accuracy; **report the gap**.
 - **Acceptance:** re-runnable script + reported gap number.
 
 ### P2 — correctness / robustness
 
 **WS7 — Correctness + robustness**
+
 - Wire **weakest-link** for multi-topic questions in the RPC path (currently only exercised in a unit test; production passes a single mastery).
 - Add readiness Rust integration test + width-based abstention test; add one AI-off "all three scores" test.
 - **Crash test:** kill mid-review 20× on both platforms → zero corruption; **offline-degradation** test (AI off, scores still work).
@@ -99,6 +106,7 @@ happens on `speedrun-sunday` (needs the existing `out/` build artifacts).
 ### P3 — hand-in bundle
 
 **WS8 — Hand-in docs + demo**
+
 - "Why this belongs in Rust" one-pager + **files-touched + merge-difficulty** list.
 - Three one-page **model descriptions** (Memory / Performance / Readiness, incl. give-up rule).
 - Architecture overview (Speedrun-specific), **honest results report** (incl. what failed).

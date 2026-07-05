@@ -44,6 +44,8 @@ from anki.consts import QUEUE_TYPE_SUSPENDED
 from anki.notes import Note, NoteId
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from anki.decks import DeckId
     from anki.models import NotetypeId
 
@@ -1356,6 +1358,19 @@ class Speedrun:
         ``docs/speedrun/ablation.md``)."""
         self.col.set_config(INTERLEAVING_CONFIG_KEY, bool(enabled))
 
+    def _question_ordering(
+        self, interleave: bool | None
+    ) -> Callable[[list[list[NoteId]]], list[NoteId]]:
+        """Pick the serving order for grouped questions.
+
+        ``interleave=None`` honours the per-collection interleaving preference
+        (:meth:`interleaving_enabled`); an explicit bool overrides it (e.g. the
+        WS5 ablation harness). Interleaved → round-robin across topics; blocked →
+        all of one topic before the next."""
+        if interleave is None:
+            interleave = self.interleaving_enabled()
+        return _round_robin if interleave else _blocked
+
     def served_questions_interleaved(
         self,
         *,
@@ -1405,9 +1420,7 @@ class Speedrun:
         grows.
         """
         exclude = exclude or set()
-        if interleave is None:
-            interleave = self.interleaving_enabled()
-        order = _round_robin if interleave else _blocked
+        order = self._question_ordering(interleave)
 
         def in_scope(nid: NoteId) -> str | None:
             """Return the bare topic (round-robin key) if ``nid`` is in scope,

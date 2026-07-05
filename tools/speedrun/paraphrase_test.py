@@ -41,8 +41,8 @@ DATA = REPO_ROOT / "tools" / "speedrun" / "data" / "paraphrase_set.json"
 class CardResult:
     card_id: str
     topic: str
-    recall: float          # memory: P(recall of the card)
-    reworded_acc: float    # performance: accuracy on the 2 reworded questions
+    recall: float  # memory: P(recall of the card)
+    reworded_acc: float  # performance: accuracy on the 2 reworded questions
 
     @property
     def gap(self) -> float:
@@ -90,7 +90,9 @@ def summarize(results: list[CardResult]) -> dict:
 # --------------------------------------------------------------------------- #
 # Demo (synthetic) data source
 # --------------------------------------------------------------------------- #
-def demo_results(cards: list[dict], seed: int = 5, transfer_penalty: float = 0.18) -> list[CardResult]:
+def demo_results(
+    cards: list[dict], seed: int = 5, transfer_penalty: float = 0.18
+) -> list[CardResult]:
     """Synthetic learner: each card has a latent mastery driving recall; reworded
     accuracy is systematically lower (memorized wording > transfer) by
     ``transfer_penalty`` plus noise. Set the penalty to 0 to see the NULL (no
@@ -101,7 +103,9 @@ def demo_results(cards: list[dict], seed: int = 5, transfer_penalty: float = 0.1
     for c in cards:
         mastery = rng.uniform(0.55, 0.98)
         recall = mastery
-        reworded = max(0.25, min(1.0, mastery - transfer_penalty + rng.uniform(-0.06, 0.06)))
+        reworded = max(
+            0.25, min(1.0, mastery - transfer_penalty + rng.uniform(-0.06, 0.06))
+        )
         out.append(CardResult(c["card_id"], c["topic"], recall, reworded))
     return out
 
@@ -157,7 +161,8 @@ def _card_recall(col, card_def, today_ms, sv) -> float | None:
             state = getattr(card, "memory_state", None)
             if state and getattr(state, "stability", 0):
                 last_ms = col.db.scalar(
-                    "select id from revlog where cid=? order by id desc limit 1", card.id
+                    "select id from revlog where cid=? order by id desc limit 1",
+                    card.id,
                 )
                 if last_ms is None:
                     continue
@@ -191,8 +196,10 @@ def _print(summary: dict, mode: str) -> None:
     print(f"cards: {summary['n']}")
     print(f"mean card recall     : {summary['mean_recall']:.3f}")
     print(f"mean reworded accuracy: {summary['mean_reworded_acc']:.3f}")
-    print(f"GAP (recall - reworded): {summary['gap']:+.3f}  "
-          f"[per-card {summary['gap_lo']:+.3f}..{summary['gap_hi']:+.3f}]")
+    print(
+        f"GAP (recall - reworded): {summary['gap']:+.3f}  "
+        f"[per-card {summary['gap_lo']:+.3f}..{summary['gap_hi']:+.3f}]"
+    )
     verdict = (
         "MEANINGFUL GAP — performance != memory (bridge exists)"
         if summary["gap"] > 0.05
@@ -202,11 +209,15 @@ def _print(summary: dict, mode: str) -> None:
     print(f"{'topic':<12} {'recall':>7} {'reworded':>9} {'gap':>7}")
     print("-" * 38)
     for t, s in summary["by_topic"].items():
-        print(f"{t:<12} {s['recall']:>7.3f} {s['reworded_acc']:>9.3f} {s['gap']:>+7.3f}")
+        print(
+            f"{t:<12} {s['recall']:>7.3f} {s['reworded_acc']:>9.3f} {s['gap']:>+7.3f}"
+        )
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Speedrun paraphrase (card recall vs reworded) test")
+    ap = argparse.ArgumentParser(
+        description="Speedrun paraphrase (card recall vs reworded) test"
+    )
     ap.add_argument("--demo", action="store_true", help="synthetic; runs with no build")
     ap.add_argument("--collection", help="path to a studied .anki2 collection")
     ap.add_argument("--seed", type=int, default=5)
@@ -218,7 +229,9 @@ def main() -> int:
 
     cards = load_set()
     if args.demo:
-        results = demo_results(cards, seed=args.seed, transfer_penalty=args.transfer_penalty)
+        results = demo_results(
+            cards, seed=args.seed, transfer_penalty=args.transfer_penalty
+        )
         mode = "demo (SYNTHETIC — not real learner data)"
     else:
         results = collection_results(args.collection, cards)

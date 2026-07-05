@@ -1,8 +1,8 @@
 # Speedrun study-feature ablation (brief §8 / M4 §4b — 15% of grade)
 
-**Pre-registered hypothesis (one sentence):** *Interleaving practice questions
+**Pre-registered hypothesis (one sentence):** _Interleaving practice questions
 across topics raises accuracy on NEW mixed-topic questions at equal study time;
-FAIL if Δ(full − ablation) ≤ 0.*
+FAIL if Δ(full − ablation) ≤ 0._
 
 The learning-science feature under test is **interleaving** (desirable
 difficulty / contextual interference). It is a single collection-config switch
@@ -45,7 +45,7 @@ model lifted by transfer.
 It is a **fair** test: the interleaving benefit is governed by one transparent
 parameter, `--transfer-weight`, and `--sweep` shows the effect **honestly
 collapses to ≈0 (a null) when that benefit is zero**. We do not have to prove the
-idea works — we have to run a test that *could* show it does not.
+idea works — we have to run a test that _could_ show it does not.
 
 The follow-up (real seed/human learners with equal time budgets) is the honest
 next step; the synthetic result is an upper-bound plausibility check plus a

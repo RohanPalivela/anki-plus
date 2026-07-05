@@ -8,14 +8,15 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 The marquee change of this fork — **question-gated card activation**, the
 **coverage sweep**, and the **value-ordered review queue** (`value =
 topic_weight × weakness`) — lives in Anki's **Rust core** (`rslib/src/speedrun/`
-+ `rslib/src/scheduler/queue/builder/speedrun_value.rs`), not in the Python
-(`pylib`/`aqt`) layer. Three reasons drove that decision (plan decision D-12).
+
+- `rslib/src/scheduler/queue/builder/speedrun_value.rs`), not in the Python
+  (`pylib`/`aqt`) layer. Three reasons drove that decision (plan decision D-12).
 
 ---
 
 ## 1. Atomic, undo-safe state transitions
 
-Activation flips a *set* of cards from `Suspended` back to their scheduled queue.
+Activation flips a _set_ of cards from `Suspended` back to their scheduled queue.
 That is a mutation of collection state, and it must be **all-or-nothing** and
 **reversible in one step** — a half-applied activation, or one that can't be
 undone, would corrupt the study loop.
@@ -28,13 +29,13 @@ guarantees for free:
 
 - a single undo entry restores the exact prior queue state;
 - it is idempotent on already-active cards (re-running a miss is safe);
-- it **never touches FSRS intervals/due dates** — it governs *activation +
-  ordering* only;
+- it **never touches FSRS intervals/due dates** — it governs _activation +
+  ordering_ only;
 - `check_database()` passes after an activate → undo round-trip (verified by
   `activation_is_undoable_and_preserves_scheduling`).
 
 Doing this from Python would mean re-implementing transaction/undo bookkeeping
-*outside* the layer that owns the write path — exactly the kind of duplicated,
+_outside_ the layer that owns the write path — exactly the kind of duplicated,
 drift-prone state machine that causes silent collection corruption. The engine
 belongs where the transaction boundary already is.
 
@@ -69,18 +70,18 @@ re-implementation** (verified reachable via `just speedrun-codegen-check`).
 Had the gating logic lived in `pylib`, Android would have needed a second,
 hand-ported copy of the engine in Kotlin — a guaranteed source of
 platform-divergent scoring and drift. Putting it in Rust means desktop and phone
-compute *identical* scores from *identical* data, which is also what makes the
+compute _identical_ scores from _identical_ data, which is also what makes the
 fixed-seed Readiness simulation reproducible across devices.
 
 ---
 
 ## Summary
 
-| Requirement | Why Rust wins |
-| :--- | :--- |
+| Requirement                   | Why Rust wins                                                                                     |
+| :---------------------------- | :------------------------------------------------------------------------------------------------ |
 | Atomic + undo-safe activation | Reuses the core's `transact`/undo + verified unsuspend path; never corrupts state or alters FSRS. |
-| Fast on 50k cards | Single in-process pass; no per-card Python/IPC round-trips on the queue hot path. |
-| Shared by Android | One engine behind one proto contract; AnkiDroid calls it over JNI with thin UI only. |
+| Fast on 50k cards             | Single in-process pass; no per-card Python/IPC round-trips on the queue hot path.                 |
+| Shared by Android             | One engine behind one proto contract; AnkiDroid calls it over JNI with thin UI only.              |
 
 The trade-off is that engine changes require a full build to regenerate
 bindings (a `cargo check` alone won't refresh the proto-derived clients), and

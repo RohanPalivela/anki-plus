@@ -8,7 +8,7 @@
 
 The one non-obvious belief this project is built on:
 **"Practice questions should drive the flashcards, not the other way around."**
-Cards start suspended; a *missed* question — classified by *why* it was missed —
+Cards start suspended; a _missed_ question — classified by _why_ it was missed —
 is what activates the linked cards. Memory is necessary but not sufficient;
 readiness is anchored to practice performance, not card counts.
 

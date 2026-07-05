@@ -291,9 +291,7 @@ class CalibrationMetrics:
         }
 
 
-def calibration_metrics(
-    pairs: Sequence[Pair], n_bins: int = 10
-) -> CalibrationMetrics:
+def calibration_metrics(pairs: Sequence[Pair], n_bins: int = 10) -> CalibrationMetrics:
     """Brier score, log loss, ECE and the reliability table for ``pairs``."""
     data = _as_pairs(pairs)
     bins = reliability_table(data, n_bins)
@@ -578,17 +576,17 @@ def save_reliability_diagram(
     JSON/CSV; the PNG is a bonus). Never raises on a missing import.
     """
     try:
-        import matplotlib
+        import matplotlib  # type: ignore[import-not-found]
 
         matplotlib.use("Agg")  # headless: no display needed
-        import matplotlib.pyplot as plt
+        import matplotlib.pyplot as plt  # type: ignore[import-not-found]
     except Exception:
         return False
 
     fig, ax = plt.subplots(figsize=(5, 5))
     ax.plot([0, 1], [0, 1], "--", color="gray", label="perfect calibration")
 
-    def _series(bins: Sequence[ReliabilityBin]):
+    def _series(bins: Sequence[ReliabilityBin]) -> tuple[list[float], list[float]]:
         xs = [b.mean_predicted for b in bins]
         ys = [b.empirical for b in bins]
         return xs, ys

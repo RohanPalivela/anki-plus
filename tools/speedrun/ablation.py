@@ -33,20 +33,31 @@ import argparse
 import random
 import statistics
 from dataclasses import dataclass
+from typing import Any
 
 TOPICS = [
-    "biochem", "biology", "orgo", "gen-chem", "physics",
-    "psych", "sociology", "physio", "genetics", "cell-bio",
+    "biochem",
+    "biology",
+    "orgo",
+    "gen-chem",
+    "physics",
+    "psych",
+    "sociology",
+    "physio",
+    "genetics",
+    "cell-bio",
 ]
 
 
 @dataclass
 class LearnerParams:
-    learn_rate: float = 0.08      # mastery gained per study event on a topic
-    transfer_weight: float = 0.25 # how much interleaving's context-switching helps transfer
-    switch_gain: float = 0.03     # transfer skill gained per context switch during study
-    block_size: int = 6           # consecutive events per topic in blocked practice
-    guess: float = 0.25           # 4-option MCQ floor on the held-out test
+    learn_rate: float = 0.08  # mastery gained per study event on a topic
+    transfer_weight: float = (
+        0.25  # how much interleaving's context-switching helps transfer
+    )
+    switch_gain: float = 0.03  # transfer skill gained per context switch during study
+    block_size: int = 6  # consecutive events per topic in blocked practice
+    guess: float = 0.25  # 4-option MCQ floor on the held-out test
 
 
 def _start_mastery(rng: random.Random) -> dict:
@@ -65,8 +76,9 @@ def _uniform_blocked_order(events: int, topics: list[str]) -> list[str]:
     return order
 
 
-def _weakness_interleaved_order(events: int, topics: list[str], p: LearnerParams,
-                                start: dict) -> list[str]:
+def _weakness_interleaved_order(
+    events: int, topics: list[str], p: LearnerParams, start: dict
+) -> list[str]:
     """full: pick the weakest topic each step but never repeat back-to-back."""
     mastery = dict(start)
     order: list[str] = []
@@ -80,8 +92,9 @@ def _weakness_interleaved_order(events: int, topics: list[str], p: LearnerParams
     return order
 
 
-def _weakness_blocked_order(events: int, topics: list[str], p: LearnerParams,
-                            start: dict) -> list[str]:
+def _weakness_blocked_order(
+    events: int, topics: list[str], p: LearnerParams, start: dict
+) -> list[str]:
     """ablation: weakness-targeted but BLOCKED — study the weakest topic in runs
     of ``block_size`` before re-choosing (few context switches)."""
     mastery = dict(start)
@@ -94,8 +107,9 @@ def _weakness_blocked_order(events: int, topics: list[str], p: LearnerParams,
     return order
 
 
-def simulate(order: list[str], topics: list[str], p: LearnerParams,
-             start: dict) -> tuple[dict, float]:
+def simulate(
+    order: list[str], topics: list[str], p: LearnerParams, start: dict
+) -> tuple[dict, float]:
     """Run a study order through the learner; return (mastery, transfer_skill)."""
     mastery = dict(start)
     transfer = 0.0
@@ -108,8 +122,13 @@ def simulate(order: list[str], topics: list[str], p: LearnerParams,
     return mastery, transfer
 
 
-def test_accuracy(mastery: dict, transfer: float, p: LearnerParams,
-                  rng: random.Random, n_items: int = 400) -> float:
+def test_accuracy(
+    mastery: dict,
+    transfer: float,
+    p: LearnerParams,
+    rng: random.Random,
+    n_items: int = 400,
+) -> float:
     """Accuracy on NEW mixed-topic held-out questions (2 topics each, weakest-link).
 
     P(correct) = guess-floored logistic of the weakest-link mastery, lifted by a
@@ -148,11 +167,11 @@ def run_condition(kind: str, events: int, p: LearnerParams, seed: int) -> float:
 
 def experiment(events: int, seeds: int, p: LearnerParams) -> dict:
     conditions = ["full", "ablation", "plain"]
-    results = {c: [] for c in conditions}
+    results: dict[str, list[float]] = {c: [] for c in conditions}
     for s in range(seeds):
         for c in conditions:
             results[c].append(run_condition(c, events, p, seed=1000 + s))
-    summary = {}
+    summary: dict[str, Any] = {}
     for c in conditions:
         xs = results[c]
         summary[c] = {
@@ -161,16 +180,24 @@ def experiment(events: int, seeds: int, p: LearnerParams) -> dict:
             "hi": max(xs),
             "stdev": statistics.pstdev(xs) if len(xs) > 1 else 0.0,
         }
-    summary["delta_full_minus_ablation"] = summary["full"]["mean"] - summary["ablation"]["mean"]
-    summary["delta_ablation_minus_plain"] = summary["ablation"]["mean"] - summary["plain"]["mean"]
+    summary["delta_full_minus_ablation"] = (
+        summary["full"]["mean"] - summary["ablation"]["mean"]
+    )
+    summary["delta_ablation_minus_plain"] = (
+        summary["ablation"]["mean"] - summary["plain"]["mean"]
+    )
     summary["hypothesis_supported"] = summary["delta_full_minus_ablation"] > 0
     return summary
 
 
 def _print(summary: dict, p: LearnerParams, events: int, seeds: int) -> None:
     print("=== Speedrun ablation: interleaving (SIMULATION) ===")
-    print(f"pre-registered: interleaving raises mixed-topic accuracy at equal study time; fail if Δ(full−ablation)≤0")
-    print(f"study events={events} (equal per build), seeds={seeds}, transfer_weight={p.transfer_weight}\n")
+    print(
+        "pre-registered: interleaving raises mixed-topic accuracy at equal study time; fail if Δ(full−ablation)≤0"
+    )
+    print(
+        f"study events={events} (equal per build), seeds={seeds}, transfer_weight={p.transfer_weight}\n"
+    )
     print(f"{'build':<10} {'mean':>7} {'range':>17}")
     print("-" * 36)
     for c in ("full", "ablation", "plain"):
@@ -181,16 +208,26 @@ def _print(summary: dict, p: LearnerParams, events: int, seeds: int) -> None:
     d2 = summary["delta_ablation_minus_plain"]
     print(f"Δ full − ablation   = {d1:+.3f}  (interleaving effect)")
     print(f"Δ ablation − plain  = {d2:+.3f}  (rest-of-Speedrun effect)")
-    verdict = "SUPPORTED" if summary["hypothesis_supported"] else "NULL / NOT SUPPORTED (report honestly)"
+    verdict = (
+        "SUPPORTED"
+        if summary["hypothesis_supported"]
+        else "NULL / NOT SUPPORTED (report honestly)"
+    )
     print(f"\nHypothesis: {verdict}")
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Speedrun interleaving ablation simulation")
-    ap.add_argument("--events", type=int, default=100, help="study events per build (equal time)")
+    ap = argparse.ArgumentParser(
+        description="Speedrun interleaving ablation simulation"
+    )
+    ap.add_argument(
+        "--events", type=int, default=100, help="study events per build (equal time)"
+    )
     ap.add_argument("--seeds", type=int, default=50)
     ap.add_argument("--transfer-weight", type=float, default=0.25)
-    ap.add_argument("--sweep", action="store_true", help="sweep transfer-weight to show the null")
+    ap.add_argument(
+        "--sweep", action="store_true", help="sweep transfer-weight to show the null"
+    )
     args = ap.parse_args()
 
     if args.sweep:

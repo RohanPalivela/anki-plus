@@ -33,11 +33,12 @@ import tempfile
 import time
 from collections.abc import Callable
 
-import bench_lib
-from _bootstrap import ensure_anki_importable
+import bench_lib  # type: ignore[import-not-found]
+from _bootstrap import ensure_anki_importable  # type: ignore[import-not-found]
 
 ensure_anki_importable()
 
+from anki.cards import Card  # noqa: E402
 from anki.collection import Collection  # noqa: E402
 
 
@@ -53,7 +54,7 @@ def _bench_button_and_next(col: Collection, iterations: int) -> list[bench_lib.S
     next_samples: list[float] = []
     for _ in range(iterations):
         # Time fetching the next card...
-        card_box: list[object] = []
+        card_box: list[Card | None] = []
         next_samples.append(_time_ms(lambda: card_box.append(col.sched.getCard())))
         card = card_box[0]
         if card is None:
@@ -63,7 +64,9 @@ def _bench_button_and_next(col: Collection, iterations: int) -> list[bench_lib.S
             _time_ms(lambda: col.sched.answerCard(card, 3, from_queue=False))
         )
     return [
-        bench_lib.summarize("button_ack", "Button press ack (answerCard)", button_samples),
+        bench_lib.summarize(
+            "button_ack", "Button press ack (answerCard)", button_samples
+        ),
         bench_lib.summarize("next_card", "Next card appears (queue)", next_samples),
     ]
 
@@ -81,7 +84,9 @@ def _bench_dashboard(col: Collection, iterations: int) -> list[bench_lib.Stat]:
     mem = col.speedrun.get_memory_score()
     note = "abstained" if getattr(mem, "abstained", False) else ""
     return [
-        bench_lib.summarize("dashboard_load", "Dashboard first load (cold)", [cold], note),
+        bench_lib.summarize(
+            "dashboard_load", "Dashboard first load (cold)", [cold], note
+        ),
         bench_lib.summarize(
             "dashboard_refresh", "Dashboard refresh (warm)", warm_samples, note
         ),
@@ -120,7 +125,7 @@ def main() -> int:
     deck = args.deck
     tmp_created = False
     if not deck:
-        import gen_deck
+        import gen_deck  # type: ignore[import-not-found]
 
         deck = os.path.join(tempfile.mkdtemp(prefix="speedrun-bench-"), "col.anki2")
         print(f"No --deck given; generating a {args.count}-card deck at {deck}\n")

@@ -34,10 +34,15 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import os
+import math
 import random
-from dataclasses import asdict
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # Type-check-time only: the built anki pkg is available to mypy but we avoid
+    # importing it at runtime so --demo works without a compiled backend.
+    from anki.speedrun_validation import Pair
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -61,7 +66,7 @@ DEFAULT_OUT = REPO_ROOT / "docs" / "speedrun" / "artifacts"
 # --------------------------------------------------------------------------- #
 # Data sources
 # --------------------------------------------------------------------------- #
-def demo_memory_pairs(n: int = 1200, seed: int = 7) -> list[sv.Pair]:
+def demo_memory_pairs(n: int = 1200, seed: int = 7) -> list[Pair]:
     """Deterministic synthetic (predicted_recall, outcome) pairs.
 
     The generator injects a mild *over-confidence* miscalibration (predictions
@@ -69,7 +74,7 @@ def demo_memory_pairs(n: int = 1200, seed: int = 7) -> list[sv.Pair]:
     isotonic path, not a pre-cooked perfect result.
     """
     rng = random.Random(seed)
-    pairs: list[sv.Pair] = []
+    pairs: list[Pair] = []
     for _ in range(n):
         true_p = rng.random()
         outcome = 1 if rng.random() < true_p else 0
@@ -79,10 +84,10 @@ def demo_memory_pairs(n: int = 1200, seed: int = 7) -> list[sv.Pair]:
     return pairs
 
 
-def demo_performance_pairs(n: int = 400, seed: int = 11) -> list[sv.Pair]:
+def demo_performance_pairs(n: int = 400, seed: int = 11) -> list[Pair]:
     """Synthetic held-out question (P(correct), outcome) pairs with real signal."""
     rng = random.Random(seed)
-    pairs: list[sv.Pair] = []
+    pairs: list[Pair] = []
     for _ in range(n):
         theta = rng.gauss(0.3, 1.0)
         a = rng.uniform(0.6, 1.8)
@@ -94,7 +99,7 @@ def demo_performance_pairs(n: int = 400, seed: int = 11) -> list[sv.Pair]:
     return pairs
 
 
-def collection_memory_pairs(col_path: str) -> list[sv.Pair]:
+def collection_memory_pairs(col_path: str) -> list[Pair]:
     """Best-effort (predicted_recall, outcome) pairs from real review history.
 
     Method: for each activated (non-suspended) flashcard with FSRS memory state,
@@ -107,7 +112,7 @@ def collection_memory_pairs(col_path: str) -> list[sv.Pair]:
     from anki.collection import Collection
 
     col = Collection(col_path)
-    pairs: list[sv.Pair] = []
+    pairs: list[Pair] = []
     try:
         today_ms = col.sched.day_cutoff * 1000
         # Non-suspended cards that carry FSRS state and at least one review.
@@ -134,7 +139,7 @@ def collection_memory_pairs(col_path: str) -> list[sv.Pair]:
     return pairs
 
 
-def collection_performance_pairs(col_path: str) -> list[sv.Pair]:
+def collection_performance_pairs(col_path: str) -> list[Pair]:
     """Best-effort held-out (P(correct), outcome) pairs on pool::heldout questions.
 
     For each answered ``pool::heldout`` question we have the realized outcome; the
@@ -147,7 +152,7 @@ def collection_performance_pairs(col_path: str) -> list[sv.Pair]:
     from anki.speedrun import QUESTION_NOTETYPE_NAME  # noqa: F401
 
     col = Collection(col_path)
-    pairs: list[sv.Pair] = []
+    pairs: list[Pair] = []
     try:
         # Per-topic mastery lookup from the Memory RPC.
         mem = col.speedrun.get_memory_score()
@@ -189,7 +194,7 @@ def _estimate_theta_from_served(col, mastery_by_topic) -> float:
             eff = theta + sv.mastery_logit(sv.mastery_signal(masteries))
             p = sv.p_correct_2pl(eff, a, b)
             p = sv._clamp(p, 1e-6, 1 - 1e-6)
-            ll += (outcome * sv.math.log(p)) + ((1 - outcome) * sv.math.log(1 - p))
+            ll += (outcome * math.log(p)) + ((1 - outcome) * math.log(1 - p))
         if ll > best_ll:
             best_ll, best_theta = ll, theta
     return best_theta
@@ -281,30 +286,52 @@ def run_leakage(out_dir: Path) -> dict:
 
         report = out_dir / "leakage_report.txt"
         proc = subprocess.run(
-            [sys.executable, str(REPO_ROOT / "tools/speedrun/rephrase_eval.py"), "--mock"],
+            [
+                sys.executable,
+                str(REPO_ROOT / "tools/speedrun/rephrase_eval.py"),
+                "--mock",
+            ],
             capture_output=True,
             text=True,
             cwd=str(REPO_ROOT),
+            check=False,
         )
         report.write_text(proc.stdout + "\n" + proc.stderr)
         clean = "leak" not in proc.stdout.lower() or "clean" in proc.stdout.lower()
-        return {"ran": True, "exit_code": proc.returncode, "report": str(report), "clean_hint": clean}
+        return {
+            "ran": True,
+            "exit_code": proc.returncode,
+            "report": str(report),
+            "clean_hint": clean,
+        }
     except Exception as exc:  # noqa: BLE001
-        return {"ran": False, "error": str(exc), "hint": "run: python tools/speedrun/rephrase_eval.py --mock"}
+        return {
+            "ran": False,
+            "error": str(exc),
+            "hint": "run: python tools/speedrun/rephrase_eval.py --mock",
+        }
 
 
 def _write_reliability_csv(path: Path, bins) -> None:
     with open(path, "w", newline="") as fh:
         w = csv.writer(fh)
-        w.writerow(["bin_lower", "bin_upper", "mean_predicted", "empirical", "count", "gap"])
+        w.writerow(
+            ["bin_lower", "bin_upper", "mean_predicted", "empirical", "count", "gap"]
+        )
         for b in bins:
-            w.writerow([b.lower, b.upper, b.mean_predicted, b.empirical, b.count, b.gap])
+            w.writerow(
+                [b.lower, b.upper, b.mean_predicted, b.empirical, b.count, b.gap]
+            )
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Speedrun held-out validation harness")
-    ap.add_argument("--demo", action="store_true", help="synthetic data; runs without a build")
-    ap.add_argument("--collection", help="path to a .anki2 collection for real validation")
+    ap.add_argument(
+        "--demo", action="store_true", help="synthetic data; runs without a build"
+    )
+    ap.add_argument(
+        "--collection", help="path to a .anki2 collection for real validation"
+    )
     ap.add_argument("--out", default=str(DEFAULT_OUT), help="artifact output directory")
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--split", choices=["random", "time"], default="random")
@@ -327,7 +354,9 @@ def main() -> int:
 
     report = {
         "mode": mode,
-        "memory": validate_memory(mem_pairs, out_dir, args.seed, args.split) if mem_pairs else None,
+        "memory": validate_memory(mem_pairs, out_dir, args.seed, args.split)
+        if mem_pairs
+        else None,
         "performance": validate_performance(perf_pairs) if perf_pairs else None,
         "leakage": run_leakage(out_dir),
     }
@@ -344,15 +373,23 @@ def _print_summary(report: dict) -> None:
     if mem:
         raw, best = mem["raw"], mem["best_recalibrator"]
         print("MEMORY (held-out calibration)")
-        print(f"  test n={mem['n_test']}  Brier={raw['brier']:.4f}  logloss={raw['log_loss']:.4f}  ECE={raw['ece']:.4f}")
-        print(f"  best recalibrator: {best}  (Brier platt={mem['platt']['brier']:.4f}, isotonic={mem['isotonic']['brier']:.4f})")
+        print(
+            f"  test n={mem['n_test']}  Brier={raw['brier']:.4f}  logloss={raw['log_loss']:.4f}  ECE={raw['ece']:.4f}"
+        )
+        print(
+            f"  best recalibrator: {best}  (Brier platt={mem['platt']['brier']:.4f}, isotonic={mem['isotonic']['brier']:.4f})"
+        )
     perf = report.get("performance")
     if perf:
         print("\nPERFORMANCE (held-out questions)")
-        print(f"  n={perf['n']}  accuracy={perf['accuracy']:.3f}  AUC={perf['auc']:.3f}  (chance=0.5)  beats_chance={perf['beats_chance']}")
+        print(
+            f"  n={perf['n']}  accuracy={perf['accuracy']:.3f}  AUC={perf['auc']:.3f}  (chance=0.5)  beats_chance={perf['beats_chance']}"
+        )
     leak = report.get("leakage", {})
     print("\nLEAKAGE")
-    print(f"  {'ran, see ' + leak['report'] if leak.get('ran') else leak.get('hint', 'not run')}")
+    print(
+        f"  {'ran, see ' + leak['report'] if leak.get('ran') else leak.get('hint', 'not run')}"
+    )
 
 
 if __name__ == "__main__":
