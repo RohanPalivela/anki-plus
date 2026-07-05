@@ -1,100 +1,139 @@
 {
-  "mode": "collection: /tmp/speedrun_real/collection.anki2",
+  "mode": "collection: /tmp/eval/collection.anki2",
   "memory": {
-    "n_train": 46,
-    "n_test": 20,
+    "n_train": 88,
+    "n_test": 38,
     "split": "random",
     "raw": {
-      "n": 20,
-      "brier": 0.10937850546544518,
-      "log_loss": 0.3273966002739951,
-      "ece": 0.19337974126202645,
+      "n": 38,
+      "brier": 0.19761301995234065,
+      "log_loss": 0.5282378679155003,
+      "ece": 0.30981968265640053,
       "reliability": [
         {
           "lower": 0.5,
           "upper": 0.6,
-          "count": 8,
-          "mean_predicted": 0.5194182847161792,
-          "empirical": 0.125,
-          "gap": -0.39441828471617923
+          "count": 7,
+          "mean_predicted": 0.5200828818234627,
+          "empirical": 0.0,
+          "gap": -0.5200828818234627
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 9,
+          "mean_predicted": 0.7848186612406692,
+          "empirical": 0.0,
+          "gap": -0.7848186612406692
         },
         {
           "lower": 0.8,
           "upper": 0.9,
-          "count": 4,
-          "mean_predicted": 0.8951420310803954,
+          "count": 3,
+          "mean_predicted": 0.8951602995526242,
           "empirical": 1.0,
-          "gap": 0.10485796891960464
+          "gap": 0.10483970044737578
         },
         {
           "lower": 0.9,
           "upper": 1.0,
-          "count": 8,
-          "mean_predicted": 0.9633979160209154,
+          "count": 19,
+          "mean_predicted": 0.9602799623331142,
           "empirical": 1.0,
-          "gap": 0.0366020839790846
+          "gap": 0.03972003766688581
         }
       ]
     },
     "platt": {
-      "n": 20,
-      "brier": 0.055643220241804056,
-      "log_loss": 0.24131066581431523,
-      "ece": 0.08684266898702651,
+      "n": 38,
+      "brier": 0.02065329017636751,
+      "log_loss": 0.11017360889166383,
+      "ece": 0.09759017385434614,
       "reliability": [
         {
           "lower": 0.0,
           "upper": 0.1,
-          "count": 8,
-          "mean_predicted": 0.030710985401437872,
-          "empirical": 0.125,
-          "gap": 0.09428901459856212
+          "count": 7,
+          "mean_predicted": 0.008895673501087558,
+          "empirical": 0.0,
+          "gap": -0.008895673501087558
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 9,
+          "mean_predicted": 0.17265360559516105,
+          "empirical": 0.0,
+          "gap": -0.17265360559516105
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 3,
+          "mean_predicted": 0.6543541508004086,
+          "empirical": 1.0,
+          "gap": 0.3456458491995914
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 2,
+          "mean_predicted": 0.7746863476582697,
+          "empirical": 1.0,
+          "gap": 0.22531365234173029
         },
         {
           "lower": 0.8,
           "upper": 0.9,
-          "count": 4,
-          "mean_predicted": 0.8045432721704998,
+          "count": 3,
+          "mean_predicted": 0.8760511769272018,
           "empirical": 1.0,
-          "gap": 0.1954567278295002
+          "gap": 0.1239488230727982
         },
         {
           "lower": 0.9,
           "upper": 1.0,
-          "count": 8,
-          "mean_predicted": 0.9749107060457459,
+          "count": 14,
+          "mean_predicted": 0.9833669199928242,
           "empirical": 1.0,
-          "gap": 0.025089293954254077
+          "gap": 0.016633080007175782
         }
       ]
     },
     "isotonic": {
-      "n": 20,
-      "brier": 0.05000000006934867,
-      "log_loss": 1.7269412760161416,
-      "ece": 0.05000245623593151,
+      "n": 38,
+      "brier": 0.000796978402209261,
+      "log_loss": 0.0187295865841909,
+      "ece": 0.018319148569223516,
       "reliability": [
         {
           "lower": 0.0,
           "upper": 0.1,
-          "count": 8,
-          "mean_predicted": 0.0,
-          "empirical": 0.125,
-          "gap": 0.125
+          "count": 16,
+          "mean_predicted": 0.043506456341986056,
+          "empirical": 0.0,
+          "gap": -0.043506456341986056
         },
         {
           "lower": 0.9,
           "upper": 1.0,
-          "count": 12,
-          "mean_predicted": 0.9999959062734475,
+          "count": 22,
+          "mean_predicted": 0.9999988934473311,
           "empirical": 1.0,
-          "gap": 4.093726552523158e-06
+          "gap": 1.1065526689391092e-06
         }
       ]
     },
     "best_recalibrator": "isotonic"
   },
-  "performance": null,
+  "performance": {
+    "n": 60,
+    "accuracy": 0.5166666666666667,
+    "auc": 0.6713014460511679,
+    "chance_auc": 0.5,
+    "base_rate": 0.48333333333333334,
+    "beats_chance": true
+  },
   "leakage": {
     "ran": true,
     "exit_code": 0,

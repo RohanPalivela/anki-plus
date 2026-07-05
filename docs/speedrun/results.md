@@ -6,27 +6,31 @@ studied-deck / device numbers must replace them before hand-in. Demo numbers are
 clearly labelled SYNTHETIC and must never be presented as real learner data.
 
 > **Real data source.** Runs below marked REAL use the author's own studied
-> collection (profile `hello`): 4,996 cards, **211 reviews** spanning
-> 2026-07-02 → 2026-07-05 (40 graded question answers + 171 FSRS flashcard
-> reviews). All harnesses were run against a read-only copy so the live
-> collection was never mutated. The dataset is real but small, so some metrics
-> honestly abstain or carry wide uncertainty — flagged inline.
+> collection (profile `hello`): 4,996 cards, spanning 2026-07-02 → 2026-07-05,
+> plus a **60-question held-out eval pass** answered in-app on 2026-07-05 (via
+> Tools ▸ Speedrun ▸ Study held-out questions) to populate the Performance
+> split. All harnesses were run against a read-only copy so the live collection
+> was never mutated. The dataset is real but small, so some metrics carry wide
+> uncertainty — flagged inline.
 
 ## 1. Memory calibration (held-out) — `just speedrun-validate`
 
-- **REAL (2026-07-05, profile `hello`):** held-out test n=20 — **Brier 0.109**,
-  **log loss 0.327**, **ECE 0.193**; best recalibrator = **isotonic**
-  (Brier → 0.050; Platt → 0.056). Caveat: n=20 held-out is small, so treat the
-  point estimates as indicative rather than tight.
+- **REAL (2026-07-05, profile `hello`, after held-out pass):** held-out test
+  n=38 — **Brier 0.198**, **log loss 0.528**, **ECE 0.310**; best recalibrator
+  = **isotonic** (Brier → 0.001; Platt → 0.021). Caveat: still a small split, so
+  the recalibrated Brier in particular is optimistic on n=38; treat point
+  estimates as indicative. Reliability CSV: `artifacts/memory_reliability.csv`.
 - Reference (SYNTHETIC): Brier ≈ 0.179, log loss ≈ 0.531, ECE ≈ 0.087; best
   recalibrator = Platt (Brier → 0.170).
 
 ## 2. Performance (held-out questions) — `just speedrun-validate`
 
-- **REAL (2026-07-05):** no metric emitted — none of the 40 answered questions
-  are tagged `pool::heldout`, so there is no held-out performance split yet. The
-  harness runs and abstains correctly (honest empty, not a crash). To populate:
-  answer some `pool::heldout` questions, then re-run.
+- **REAL (2026-07-05):** **n=60, accuracy 0.517, ROC-AUC 0.671** (chance 0.5,
+  **beats_chance=True**) on the `pool::heldout` questions answered in-app. The
+  Performance 2PL predictions — fit only on served answers — rank the held-out
+  outcomes better than chance, i.e. the model generalizes to unseen questions.
+  AUC is modest given n=60 and a first study pass; more held-out answers tighten
+  it. Full run: `artifacts/validation_report.json`.
 - Reference (SYNTHETIC): n=400, accuracy ≈ 0.77, AUC ≈ 0.82 (> 0.5 chance).
 
 ## 3. Paraphrase gap — `just speedrun-paraphrase`
@@ -92,5 +96,6 @@ clearly labelled SYNTHETIC and must never be presented as real learner data.
   the production RPC path is being finalized (WS7).
 - Memory uses an unweighted (not stability-weighted) mean — a deliberate,
   documented deviation from the original plan wording.
-- Real held-out numbers (memory/performance/paraphrase) require a studied deck;
-  the harnesses are ready and re-runnable, the organic data is pending.
+- Memory + Performance held-out numbers are now REAL (studied in-app 2026-07-05);
+  the **paraphrase gap** is the last one still pending real data — import the set
+  and answer the reworded questions (Tools ▸ Speedrun) to populate it.
